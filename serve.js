@@ -1,0 +1,31 @@
+require("dotenv").config();
+const express = require("express");
+const mongoose = require("mongoose");
+const cors = require("cors");
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+// Conectar ao MongoDB Atlas
+mongoose
+  .connect(process.env.MONGO_URI, {})
+  .then(() => console.log("Conectado ao MongoDB Atlas"))
+  .catch((error) => console.error("Erro ao conectar ao MongoDB:", error));
+
+// Rotas principais
+app.use("/auth", require("./routes/authRoutes"));
+app.use("/community", require("./routes/communityRoutes"));
+app.use("/diary", require("./routes/diaryRoutes"));
+app.use("/gamification", require("./routes/gamificationRoutes"));
+app.use("/challenges", require("./routes/challengeRoutes"));
+app.use("/geo", require("./routes/geoRoutes"));
+app.use("/exercises", require("./routes/exerciseRoutes"));
+app.use("/educational", require("./routes/educationalRoutes"));
+app.use("/automate", require("./routes/automateRoutes"));
+app.use("/moderation", require("./routes/moderationRoutes"));
+
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () =>
+  console.log(`Servidor em execução http://localhost:${PORT}`)
+);

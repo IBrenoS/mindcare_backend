@@ -3,7 +3,7 @@ const router = express.Router();
 const authMiddleware = require("../middlewares/auth");
 const authorize = require("../middlewares/authorize");
 const Video = require("../models/video");
-const Article = require("../models/Articles");
+const Article = require("../models/articles");
 
 // Rota para listar vídeos pendentes
 router.get(

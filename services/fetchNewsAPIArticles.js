@@ -1,5 +1,5 @@
 const axios = require("axios");
-const Article = require("../models/Articles");
+const Article = require("../models/articles");
 
 async function fetchNewsAPIArticles() {
   const apiKey = process.env.NEWS_API_KEY;

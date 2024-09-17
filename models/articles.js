@@ -14,6 +14,5 @@ const articleSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
 });
 
-// Verifique se o modelo já foi registrado para evitar sobrescrita
-module.exports =
-  mongoose.models.Article || mongoose.model("Article", articleSchema);
+
+module.exports = mongoose.models.Article || mongoose.model("Article", articleSchema);

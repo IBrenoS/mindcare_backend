@@ -1,3 +1,4 @@
 node_modules
-config
+config/firebase-admin.js
+config/mindcare-fbs-firebase-adminsdk-2z49s-b6211106ff.json
 .env

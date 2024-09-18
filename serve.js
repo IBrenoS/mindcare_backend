@@ -13,6 +13,11 @@ mongoose
   .then(() => console.log("Conectado ao MongoDB Atlas"))
   .catch((error) => console.error("Erro ao conectar ao MongoDB:", error));
 
+  // Rota para servir o assetlinks.json
+app.get("/.well-known/assetlinks.json", (req, res) => {
+  res.sendFile(path.join(__dirname, ".well-known", "assetlinks.json"));
+});
+
 // Rotas principais
 app.use("/auth", require("./routes/authRoutes"));
 app.use("/community", require("./routes/communityRoutes"));

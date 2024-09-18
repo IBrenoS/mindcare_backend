@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "br.com.mindcareapp.mindcare_app",
+      "sha256_cert_fingerprints": [
+        "9C:91:B1:4E:7A:66:1A:12:C7:36:ED:7E:FA:52:90:8A:2C:53:C3:2C:DD:39:1A:0D:EB:F1:0D:11:EC:47:CB:A9"
+      ]
+    }
+  }
+]

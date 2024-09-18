@@ -3,6 +3,7 @@ const bcrypt = require("bcrypt");
 const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 const { body, validationResult } = require("express-validator");
+const validator = require("validator");
 const authMiddleware = require("../middlewares/auth");
 const User = require("../models/user");
 const { sendPasswordResetEmail } = require("../services/sendGrid");

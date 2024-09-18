@@ -19,6 +19,10 @@ app.get("/.well-known/assetlinks.json", (req, res) => {
   res.sendFile(path.join(__dirname, ".well-known", "assetlinks.json"));
 });
 
+app.get("/favicon.ico", (req, res) => {
+  res.sendFile(path.join(__dirname, "icon", "favicon.ico"));
+});
+
 // Rotas principais
 app.use("/auth", require("./routes/authRoutes"));
 app.use("/community", require("./routes/communityRoutes"));

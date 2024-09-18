@@ -86,7 +86,7 @@ router.post(
         { expiresIn: "1h" }
       );
 
-      res.json({ token });
+      res.json({ msg: "Usuário registrado com sucesso.", token });
     } catch (err) {
       console.error(err.message);
       res.status(500).send("Erro no servidor");

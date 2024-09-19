@@ -209,13 +209,20 @@ router.put(
   }
 );
 
-// Rota para solicitar recuperação de senha
+function safeNormalizeEmail(email) {
+  // Converte o e-mail para minúsculas e remove espaços
+  return email.toLowerCase().trim();
+}
+
+// Rota para solicitação de recuperação de senha
 router.post("/forgotPassword", async (req, res) => {
   let { email } = req.body;
 
   try {
-    // Sanitização e Validação
-    email = validator.normalizeEmail(email);
+    // Aplica a normalização segura
+    email = safeNormalizeEmail(email);
+
+    // Validação do e-mail após a normalização segura
     if (!validator.isEmail(email)) {
       return res.status(400).json({ msg: "E-mail inválido." });
     }
@@ -223,7 +230,11 @@ router.post("/forgotPassword", async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) {
       // Retorna uma mensagem genérica para evitar exposição
-      return res.status(200).json({ msg: "Se o e-mail estiver cadastrado, um código de verificação será enviado." });
+      return res
+        .status(200)
+        .json({
+          msg: "Se o e-mail estiver cadastrado, um código de verificação será enviado.",
+        });
     }
 
     // Gera o código de verificação de 6 dígitos
@@ -241,7 +252,11 @@ router.post("/forgotPassword", async (req, res) => {
     // Envia o código de verificação por e-mail via SendGrid
     await sendPasswordResetEmail(user.email, verificationCode);
 
-    res.status(200).json({ msg: "Se o e-mail estiver cadastrado, um código de verificação será enviado." });
+    res
+      .status(200)
+      .json({
+        msg: "Se o e-mail estiver cadastrado, um código de verificação será enviado.",
+      });
   } catch (error) {
     console.error("Erro ao solicitar recuperação de senha:", error.message);
     res.status(500).json({ msg: "Erro ao solicitar recuperação de senha." });
@@ -256,24 +271,32 @@ function generateRandomCode() {
 const MAX_ATTEMPTS = 5;
 const LOCK_TIME = 15 * 60 * 1000; // Bloqueia por 15 minutos após exceder as tentativas
 
-// Verificação do código de recuperação
+// Rota para verificação do código de recuperação
 router.post("/verifyCode", async (req, res) => {
   let { email, code } = req.body;
 
   try {
-    // Sanitização e Validação
-    email = validator.normalizeEmail(email);
-    code = validator.escape(code);
+    // Verificação inicial de entrada
+    if (!email || !code) {
+      return res
+        .status(400)
+        .json({ msg: "E-mail e código de verificação são obrigatórios." });
+    }
 
+    // Validação do e-mail sem normalização neste ponto para evitar alterações indesejadas
     if (!validator.isEmail(email)) {
       return res.status(400).json({ msg: "E-mail inválido." });
     }
 
-    if (!validator.isLength(code, { min: 6, max: 6 })) {
+    // Garantir que o código tenha exatamente 6 caracteres numéricos
+    if (!validator.isLength(code, { min: 6, max: 6 }) || !/^\d+$/.test(code)) {
       return res.status(400).json({ msg: "Código de verificação inválido." });
     }
 
-    const user = await findUserByEmail(email);
+    // Normalização segura do e-mail após a validação
+    email = safeNormalizeEmail(email);
+
+    const user = await User.findOne({ email });
     if (!user) {
       return res.status(404).json({ msg: "Usuário não encontrado." });
     }
@@ -285,9 +308,12 @@ router.post("/verifyCode", async (req, res) => {
     }
 
     if (isCodeExpired(user)) {
-      return res.status(400).json({ msg: "O código de verificação expirou. Solicite um novo código." });
+      return res.status(400).json({
+        msg: "O código de verificação expirou. Solicite um novo código.",
+      });
     }
 
+    // Verifica se o código é válido sem alterar seu valor original
     if (!(await isCodeValid(user, code))) {
       await handleInvalidCode(user);
       return res.status(400).json({ msg: "Código de verificação inválido." });
@@ -303,8 +329,116 @@ router.post("/verifyCode", async (req, res) => {
   }
 });
 
-async function findUserByEmail(email) {
-  return await User.findOne({ email });
+function isUserLocked(user) {
+  return user.resetPasswordLockUntil && user.resetPasswordLockUntil > Date.now();
+}
+
+function isCodeExpired(user) {
+  return !user.resetPasswordExpires || user.resetPasswordExpires < Date.now();
+}
+
+async function isCodeValid(user, code) {
+  return await bcrypt.compare(code, user.resetPasswordToken);
+}
+
+async function handleInvalidCode(user) {
+  user.resetPasswordAttempts = (user.resetPasswordAttempts || 0) + 1;
+  if (user.resetPasswordAttempts >= MAX_ATTEMPTS) {
+    user.resetPasswordLockUntil = Date.now() + LOCK_TIME;
+  }
+  await user.save();
+}
+
+async function handleValidCode(user) {
+  user.resetPasswordAttempts = 0;
+  await user.save();
+}
+
+// Rota para redefinição de senha
+router.post("/resetPassword", async (req, res) => {
+  let { email, code, newPassword } = req.body;
+
+  try {
+    // Validação inicial dos inputs
+    if (!email || !code || !newPassword) {
+      return res.status(400).json({ msg: "Todos os campos são obrigatórios." });
+    }
+
+    // Validação do e-mail sem sanitização para preservar o formato original
+    if (!validator.isEmail(email)) {
+      return res.status(400).json({ msg: "E-mail inválido." });
+    }
+
+    // Verificação se o código tem exatamente 6 caracteres numéricos
+    if (!validator.isLength(code, { min: 6, max: 6 }) || !/^\d+$/.test(code)) {
+      return res.status(400).json({ msg: "Código de verificação inválido." });
+    }
+
+    // Validação da nova senha: deve ter ao menos 6 caracteres
+    if (!validator.isLength(newPassword, { min: 6 })) {
+      return res
+        .status(400)
+        .json({ msg: "A nova senha deve ter pelo menos 6 caracteres." });
+    }
+
+    // Normalização segura do e-mail após validação
+    email = safeNormalizeEmail(email);
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ msg: "Usuário não encontrado." });
+    }
+
+    const userError = await validateUserForReset(user, code);
+    if (userError) {
+      return res.status(userError.status).json({ msg: userError.msg });
+    }
+
+    // Atualiza a senha do usuário
+    await updateUserPassword(user, newPassword);
+
+    res.status(200).json({ msg: "Senha redefinida com sucesso." });
+  } catch (error) {
+    console.error("Erro ao redefinir a senha:", error.message);
+    res.status(500).json({ msg: "Erro ao redefinir a senha." });
+  }
+});
+
+// Função para validação do usuário antes da redefinição da senha
+async function validateUserForReset(user, code) {
+  if (isUserLocked(user)) {
+    return {
+      status: 423,
+      msg: "Muitas tentativas falhas. Tente novamente mais tarde.",
+    };
+  }
+
+  if (isCodeExpired(user)) {
+    return {
+      status: 400,
+      msg: "O código de verificação expirou. Solicite um novo código.",
+    };
+  }
+
+  // Verifica se o código é válido comparando o hash
+  if (!(await isCodeValid(user, code))) {
+    await handleInvalidCode(user);
+    return { status: 400, msg: "Código de verificação inválido." };
+  }
+
+  return null;
+}
+
+async function updateUserPassword(user, newPassword) {
+  const salt = await bcrypt.genSalt(10);
+  user.password = await bcrypt.hash(newPassword, salt);
+
+  user.resetPasswordToken = undefined;
+  user.resetPasswordExpires = undefined;
+  user.resetPasswordAttempts = 0;
+  user.resetPasswordLockUntil = undefined;
+
+  await user.save();
 }
 
 function isUserLocked(user) {
@@ -329,120 +463,8 @@ async function handleInvalidCode(user) {
 
 async function handleValidCode(user) {
   user.resetPasswordAttempts = 0;
-  // Não limpe o resetPasswordToken ainda, pode ser necessário na próxima etapa
   await user.save();
 }
 
-/// Redefinição de senha
-router.post("/resetPassword", async (req, res) => {
-  let { email, code, newPassword } = req.body;
-
-  try {
-    // Sanitização e Validação
-    email = sanitizeEmail(email);
-    code = sanitizeCode(code);
-    newPassword = sanitizePassword(newPassword);
-
-    const validationError = validateResetPasswordInput(email, code, newPassword);
-    if (validationError) {
-      return res.status(400).json({ msg: validationError });
-    }
-
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(404).json({ msg: "Usuário não encontrado." });
-    }
-
-    const userError = await validateUserForReset(user, code);
-    if (userError) {
-      return res.status(userError.status).json({ msg: userError.msg });
-    }
-
-    await updateUserPassword(user, newPassword);
-
-    res.status(200).json({ msg: "Senha redefinida com sucesso." });
-  } catch (error) {
-    console.error("Erro ao redefinir a senha:", error.message);
-    res.status(500).json({ msg: "Erro ao redefinir a senha." });
-  }
-});
-
-function sanitizeEmail(email) {
-  return validator.normalizeEmail(email);
-}
-
-function sanitizeCode(code) {
-  return validator.escape(code);
-}
-
-function sanitizePassword(password) {
-  return validator.escape(password);
-}
-
-function validateResetPasswordInput(email, code, newPassword) {
-  if (!validator.isEmail(email)) {
-    return "E-mail inválido.";
-  }
-
-  if (!validator.isLength(code, { min: 6, max: 6 })) {
-    return "Código de verificação inválido.";
-  }
-
-  if (!validator.isLength(newPassword, { min: 6 })) {
-    return "A nova senha deve ter pelo menos 6 caracteres.";
-  }
-
-  return null;
-}
-
-async function validateUserForReset(user, code) {
-  if (isUserLocked(user)) {
-    return { status: 423, msg: "Muitas tentativas falhas. Tente novamente mais tarde." };
-  }
-
-  if (isCodeExpired(user)) {
-    return { status: 400, msg: "O código de verificação expirou. Solicite um novo código." };
-  }
-
-  if (!(await isCodeValid(user, code))) {
-    await handleInvalidCode(user);
-    return { status: 400, msg: "Código de verificação inválido." };
-  }
-
-  return null;
-}
-
-async function updateUserPassword(user, newPassword) {
-  const salt = await bcrypt.genSalt(10);
-  user.password = await bcrypt.hash(newPassword, salt);
-
-  user.resetPasswordToken = undefined;
-  user.resetPasswordExpires = undefined;
-  user.resetPasswordAttempts = 0;
-  user.resetPasswordLockUntil = undefined;
-
-  await user.save();
-}
-
-// Funções auxiliares (as mesmas utilizadas na rota /verifyCode)
-function isUserLocked(user) {
-  return user.resetPasswordLockUntil && user.resetPasswordLockUntil > Date.now();
-}
-
-function isCodeExpired(user) {
-  return !user.resetPasswordExpires || user.resetPasswordExpires < Date.now();
-}
-
-async function isCodeValid(user, code) {
-  return await bcrypt.compare(code, user.resetPasswordToken);
-}
-
-async function handleInvalidCode(user) {
-  user.resetPasswordAttempts = (user.resetPasswordAttempts || 0) + 1;
-  if (user.resetPasswordAttempts >= MAX_ATTEMPTS) {
-    user.resetPasswordLockUntil = Date.now() + LOCK_TIME;
-  }
-  await user.save();
-}
 
 module.exports = router;

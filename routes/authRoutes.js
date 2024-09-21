@@ -472,37 +472,21 @@ async function handleValidCode(user) {
 }
 
 // Rota para upload de imagem
-router.post("/upload", authMiddleware, (req, res) => {
-  upload(req, res, async (err) => {
-    if (err instanceof multer.MulterError) {
-      // Tratamento de erro específico do multer
-      console.error("Multer error:", err);
-      return res
-        .status(400)
-        .json({ msg: "Erro no upload da imagem. Campo inesperado." });
-    } else if (err) {
-      // Tratamento de erro genérico
-      console.error("Erro no upload:", err);
-      return res
-        .status(500)
-        .json({ msg: "Erro ao processar o upload da imagem." });
-    }
-
+router.post("/upload", authMiddleware, upload.single("image"), async (req, res) => {
+  try {
     // Verifica se o arquivo foi enviado
     if (!req.file) {
       return res.status(400).json({ msg: "Nenhuma imagem foi enviada." });
     }
 
-    try {
-      const result = await uploadImageToCloudinary(req.file.buffer);
-      res.json({ secure_url: result.secure_url });
-    } catch (error) {
-      console.error("Erro ao fazer upload da imagem:", error);
-      res
-        .status(500)
-        .json({ msg: "Erro ao fazer upload da imagem. Tente novamente." });
-    }
-  });
+    // Faz o upload da imagem para o Cloudinary
+    const result = await uploadImageToCloudinary(req.file.buffer);
+    res.json({ secure_url: result.secure_url }); // Retorna a URL segura da imagem
+  } catch (error) {
+    console.error("Erro ao fazer upload da imagem:", error);
+    res.status(500).json({ msg: "Erro ao fazer upload da imagem. Tente novamente." });
+  }
 });
+
 
 module.exports = router;

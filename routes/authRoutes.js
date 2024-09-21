@@ -15,7 +15,7 @@ const router = express.Router();
 
 // Configuração do multer para armazenar arquivos temporariamente na memória
 const storage = multer.memoryStorage();
-const upload = multer({ storage }).single("image"); // Middleware de upload
+const upload = multer({ storage: storage }); // Middleware de upload
 
 async function uploadImageToCloudinary(buffer) {
   return new Promise((resolve, reject) => {

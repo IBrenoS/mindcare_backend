@@ -500,6 +500,32 @@ router.post("/upload", authMiddleware, upload.single("image"), async (req, res) 
   }
 });
 
+router.get("/validate-token", async (req, res) => {
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.split(" ")[1];
+
+  if (!token) {
+    return res.status(401).json({ message: "Token não fornecido" });
+  }
+
+  try {
+    // Valida o token usando a chave secreta definida nas variáveis de ambiente
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    // Busca o usuário com base no ID decodificado do token
+    const user = await User.findById(decoded.userId).select("-password");
+
+    if (!user) {
+      return res.status(404).json({ message: "Usuário não encontrado." });
+    }
+
+    // Se o token for válido e o usuário encontrado, retorna 200
+    res.status(200).json({ message: "Token válido", user });
+  } catch (error) {
+    console.error("Erro ao validar o token:", error);
+    res.status(403).json({ message: "Token inválido ou expirado" });
+  }
+});
 
 
 module.exports = router;

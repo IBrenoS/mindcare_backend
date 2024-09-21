@@ -36,7 +36,7 @@ async function uploadImageToCloudinary(buffer) {
 }
 
 // Registro de usuário
-router.post("/register", upload.single("file"), // Adicionando o upload no registro de usuário
+router.post("/register", upload.single("image"), // Adicionando o upload no registro de usuário
   [
     body("name").notEmpty(),
     body("email").isEmail(),
@@ -160,7 +160,7 @@ router.get("/profile", authMiddleware, async (req, res) => {
 });
 
 // Atualização do perfil do usuário
-router.put("/profile", authMiddleware, upload.single("file"),
+router.put("/profile", authMiddleware, upload.single("image"),
   async (req, res) => {
     const { name, bio, phone, email, password, newPassword } = req.body;
 

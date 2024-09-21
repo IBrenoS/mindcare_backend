@@ -179,6 +179,7 @@ router.put("/profile", authMiddleware, upload.single("image"),
       if (req.file) {
         const result = await uploadImageToCloudinary(req.file.buffer);
         user.photoUrl = result.secure_url; // Atualiza a URL da foto de perfil
+        console.log("Url da foto salva:", user.photoUrl);
       }
 
       // Atualização do email
@@ -202,6 +203,7 @@ router.put("/profile", authMiddleware, upload.single("image"),
 
       // Salva as mudanças no banco de dados
       await user.save();
+      console.log("Perfil atualizado com sucesso");
 
       res.json({
         msg: "Perfil atualizado com sucesso",
@@ -481,12 +483,23 @@ router.post("/upload", authMiddleware, upload.single("image"), async (req, res) 
 
     // Faz o upload da imagem para o Cloudinary
     const result = await uploadImageToCloudinary(req.file.buffer);
-    res.json({ secure_url: result.secure_url }); // Retorna a URL segura da imagem
+
+    // Atualiza o campo photoUrl do usuário logado
+    const user = await User.findById(req.user.id); // Pega o usuário autenticado
+    if (!user) {
+      return res.status(404).json({ msg: "Usuário não encontrado." });
+    }
+
+    user.photoUrl = result.secure_url; // Atualiza a URL da foto de perfil
+    await user.save(); // Salva as alterações no banco de dados
+
+    res.json({ msg: "Foto de perfil atualizada com sucesso.", secure_url: user.photoUrl });
   } catch (error) {
     console.error("Erro ao fazer upload da imagem:", error);
     res.status(500).json({ msg: "Erro ao fazer upload da imagem. Tente novamente." });
   }
 });
+
 
 
 module.exports = router;

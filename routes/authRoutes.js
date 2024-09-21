@@ -10,21 +10,28 @@ const { sendPasswordResetEmail } = require("../services/sendGrid");
 const cloudinary = require("../config/cloudinary");
 const multer = require("multer");
 
+
 const router = express.Router();
 
 // Configuração do multer para armazenar arquivos temporariamente na memória
 const storage = multer.memoryStorage();
-const upload = multer({ storage }); // Middleware de upload
+const upload = multer({ storage }).single("image"); // Middleware de upload
 
 async function uploadImageToCloudinary(buffer) {
   return new Promise((resolve, reject) => {
-    cloudinary.uploader.upload_stream(
-      { resource_type: "image" },
-      (error, result) => {
-        if (error) return reject(error);
+    cloudinary.uploader
+      .upload_stream({ resource_type: "image" }, (error, result) => {
+        if (error) {
+          console.error("Erro no upload para o Cloudinary:", error); // Log detalhado do erro
+          return reject(error);
+        }
+        if (!result || !result.secure_url) {
+          console.error("Erro: Resposta inesperada do Cloudinary:", result);
+          return reject(new Error("Erro ao processar upload no Cloudinary."));
+        }
         resolve(result);
-      }
-    ).end(buffer);
+      })
+      .end(buffer);
   });
 }
 
@@ -465,24 +472,37 @@ async function handleValidCode(user) {
 }
 
 // Rota para upload de imagem
-router.post("/upload", authMiddleware, upload.single("file"), async (req, res) => {
+router.post("/upload", authMiddleware, (req, res) => {
+  upload(req, res, async (err) => {
+    if (err instanceof multer.MulterError) {
+      // Tratamento de erro específico do multer
+      console.error("Multer error:", err);
+      return res
+        .status(400)
+        .json({ msg: "Erro no upload da imagem. Campo inesperado." });
+    } else if (err) {
+      // Tratamento de erro genérico
+      console.error("Erro no upload:", err);
+      return res
+        .status(500)
+        .json({ msg: "Erro ao processar o upload da imagem." });
+    }
+
+    // Verifica se o arquivo foi enviado
+    if (!req.file) {
+      return res.status(400).json({ msg: "Nenhuma imagem foi enviada." });
+    }
+
     try {
-      // Verifica se o arquivo foi enviado
-      if (!req.file) {
-        return res.status(400).json({ msg: "Nenhuma imagem foi enviada." });
-      }
-
-      // Faz o upload da imagem para o Cloudinary
       const result = await uploadImageToCloudinary(req.file.buffer);
-
-      // Retorna a URL segura da imagem
       res.json({ secure_url: result.secure_url });
     } catch (error) {
       console.error("Erro ao fazer upload da imagem:", error);
-      res.status(500).json({ msg: "Erro ao fazer upload da imagem." });
+      res
+        .status(500)
+        .json({ msg: "Erro ao fazer upload da imagem. Tente novamente." });
     }
-  }
-);
-
+  });
+});
 
 module.exports = router;

@@ -16,6 +16,18 @@ const router = express.Router();
 const storage = multer.memoryStorage();
 const upload = multer({ storage }); // Middleware de upload
 
+async function uploadImageToCloudinary(buffer) {
+  return new Promise((resolve, reject) => {
+    cloudinary.uploader.upload_stream(
+      { resource_type: "image" },
+      (error, result) => {
+        if (error) return reject(error);
+        resolve(result);
+      }
+    ).end(buffer);
+  });
+}
+
 // Registro de usuário
 router.post("/register", upload.single("file"), // Adicionando o upload no registro de usuário
   [
@@ -158,14 +170,7 @@ router.put("/profile", authMiddleware, upload.single("file"),
 
       // Se houver uma nova foto de perfil, faz o upload no Cloudinary
       if (req.file) {
-        const result = await new Promise((resolve, reject) => {
-          cloudinary.uploader
-            .upload_stream({ resource_type: "image" }, (error, result) => {
-              if (error) return reject(error);
-              resolve(result);
-            })
-            .end(req.file.buffer);
-        });
+        const result = await uploadImageToCloudinary(req.file.buffer);
         user.photoUrl = result.secure_url; // Atualiza a URL da foto de perfil
       }
 
@@ -196,7 +201,7 @@ router.put("/profile", authMiddleware, upload.single("file"),
         photoUrl: user.photoUrl,
       });
     } catch (error) {
-      console.error(error.message);
+      console.error("Erro ao atualizar o perfil:", error);
       res.status(500).json({ msg: "Erro ao atualizar o perfil." });
     }
   }
@@ -461,27 +466,23 @@ async function handleValidCode(user) {
 
 // Rota para upload de imagem
 router.post("/upload", authMiddleware, upload.single("file"), async (req, res) => {
-  try {
-    // Verifica se o arquivo foi enviado
-    if (!req.file) {
-      return res.status(400).json({ msg: "Nenhuma imagem foi enviada." });
+    try {
+      // Verifica se o arquivo foi enviado
+      if (!req.file) {
+        return res.status(400).json({ msg: "Nenhuma imagem foi enviada." });
+      }
+
+      // Faz o upload da imagem para o Cloudinary
+      const result = await uploadImageToCloudinary(req.file.buffer);
+
+      // Retorna a URL segura da imagem
+      res.json({ secure_url: result.secure_url });
+    } catch (error) {
+      console.error("Erro ao fazer upload da imagem:", error);
+      res.status(500).json({ msg: "Erro ao fazer upload da imagem." });
     }
-
-    // Faz o upload da imagem para o Cloudinary
-    const result = await new Promise((resolve, reject) => {
-      cloudinary.uploader.upload_stream({ resource_type: "image" }, (error, result) => {
-        if (error) return reject(error);
-        resolve(result);
-      }).end(req.file.buffer);
-    });
-
-    // Retorna a URL segura da imagem
-    res.json({ secure_url: result.secure_url });
-  } catch (error) {
-    console.error(error.message);
-    res.status(500).json({ msg: "Erro ao fazer upload da imagem." });
   }
-});
+);
 
 
 module.exports = router;

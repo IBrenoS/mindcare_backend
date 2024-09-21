@@ -17,9 +17,7 @@ const storage = multer.memoryStorage();
 const upload = multer({ storage }); // Middleware de upload
 
 // Registro de usuário
-router.post(
-  "/register",
-  upload.single("file"), // Adicionando o upload no registro de usuário
+router.post("/register", upload.single("file"), // Adicionando o upload no registro de usuário
   [
     body("name").notEmpty(),
     body("email").isEmail(),
@@ -96,9 +94,7 @@ router.post(
 );
 
 // Login de usuário
-router.post(
-  "/login",
-  [body("email").isEmail(), body("password").exists()],
+router.post("/login", [body("email").isEmail(), body("password").exists()],
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -145,10 +141,7 @@ router.get("/profile", authMiddleware, async (req, res) => {
 });
 
 // Atualização do perfil do usuário
-router.put(
-  "/profile",
-  authMiddleware,
-  upload.single("file"),
+router.put("/profile", authMiddleware, upload.single("file"),
   async (req, res) => {
     const { name, bio, phone, email, password, newPassword } = req.body;
 
@@ -465,6 +458,30 @@ async function handleValidCode(user) {
   user.resetPasswordAttempts = 0;
   await user.save();
 }
+
+// Rota para upload de imagem
+router.post("/upload", authMiddleware, upload.single("file"), async (req, res) => {
+  try {
+    // Verifica se o arquivo foi enviado
+    if (!req.file) {
+      return res.status(400).json({ msg: "Nenhuma imagem foi enviada." });
+    }
+
+    // Faz o upload da imagem para o Cloudinary
+    const result = await new Promise((resolve, reject) => {
+      cloudinary.uploader.upload_stream({ resource_type: "image" }, (error, result) => {
+        if (error) return reject(error);
+        resolve(result);
+      }).end(req.file.buffer);
+    });
+
+    // Retorna a URL segura da imagem
+    res.json({ secure_url: result.secure_url });
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).json({ msg: "Erro ao fazer upload da imagem." });
+  }
+});
 
 
 module.exports = router;

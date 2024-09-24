@@ -66,16 +66,23 @@ router.get("/posts", authMiddleware, async (req, res) => {
 
 // Adicionar um comentário a uma postagem
 router.post("/addComment", authMiddleware, async (req, res) => {
-  const { postId, comment } = req.body; // Removido o userId do body
+  const { postId, comment } = req.body; // Removido o userId pois ele vem de req.user
 
   try {
+    // Encontra a postagem pelo ID
     const post = await Post.findById(postId);
     if (!post) {
       return res.status(404).json({ msg: "Postagem não encontrada." });
     }
 
-    // Adiciona o comentário à postagem utilizando o ID do usuário autenticado
-    post.comments.push({ userId: req.user.id, comment });
+    // Adiciona o comentário à postagem
+    const newComment = {
+      userId: req.user.id, // Pega o userId diretamente do usuário autenticado
+      comment,
+      createdAt: new Date(), // Certifique-se de adicionar a data ao comentário
+    };
+
+    post.comments.push(newComment);
     await post.save();
 
     // Busca o token do autor da postagem
@@ -96,15 +103,16 @@ router.post("/addComment", authMiddleware, async (req, res) => {
     });
     await notification.save();
 
-    res
-      .status(200)
-      .json({ msg: "Comentário adicionado e notificação enviada." });
+    // Retorna o comentário adicionado para o frontend com a estrutura correta
+    res.status(200).json({
+      msg: "Comentário adicionado e notificação enviada.",
+      comment: newComment, // Retorna o comentário que foi adicionado
+    });
   } catch (error) {
     console.error(error.message);
     res.status(500).json({ msg: "Erro ao adicionar comentário." });
   }
 });
-
 
 // Curtir uma postagem
 router.post("/likePost", authMiddleware, async (req, res) => {

@@ -66,7 +66,7 @@ router.get("/posts", authMiddleware, async (req, res) => {
 
 // Adicionar um comentário a uma postagem
 router.post("/addComment", authMiddleware, async (req, res) => {
-  const { postId, comment } = req.body;
+  const { postId, comment } = req.body; // Removido o userId do body
 
   try {
     const post = await Post.findById(postId);
@@ -74,15 +74,11 @@ router.post("/addComment", authMiddleware, async (req, res) => {
       return res.status(404).json({ msg: "Postagem não encontrada." });
     }
 
-    const newComment = {
-      userId: req.user.id,
-      comment,
-      createdAt: new Date(),
-    };
-
-    post.comments.push(newComment);
+    // Adiciona o comentário à postagem utilizando o ID do usuário autenticado
+    post.comments.push({ userId: req.user.id, comment });
     await post.save();
 
+    // Busca o token do autor da postagem
     const postAuthor = await User.findById(post.userId);
     if (postAuthor && postAuthor.deviceToken) {
       const message = {
@@ -92,6 +88,7 @@ router.post("/addComment", authMiddleware, async (req, res) => {
       await sendPushNotification(postAuthor.deviceToken, message);
     }
 
+    // Cria uma notificação interna para o autor da postagem
     const notification = new Notification({
       userId: post.userId,
       type: "comment",
@@ -99,27 +96,16 @@ router.post("/addComment", authMiddleware, async (req, res) => {
     });
     await notification.save();
 
-    // Busca o nome do usuário que comentou
-    const commentingUser = await User.findById(req.user.id);
-
-    res.status(200).json({
-      msg: "Comentário adicionado e notificação enviada.",
-      comment: {
-        userId: {
-          id: req.user.id,
-          name: commentingUser.name,
-        },
-        comment: newComment.comment,
-        createdAt: newComment.createdAt,
-      },
-    });
+    res
+      .status(200)
+      .json({ msg: "Comentário adicionado e notificação enviada." });
   } catch (error) {
     console.error(error.message);
     res.status(500).json({ msg: "Erro ao adicionar comentário." });
   }
 });
 
-// Curtir uma postagem
+
 router.post("/likePost", authMiddleware, async (req, res) => {
   const { postId } = req.body; // Removido o userId do body
 

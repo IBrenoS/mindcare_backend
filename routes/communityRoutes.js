@@ -66,7 +66,7 @@ router.get("/posts", authMiddleware, async (req, res) => {
 
 // Adicionar um comentário a uma postagem
 router.post("/addComment", authMiddleware, async (req, res) => {
-  const { postId, userId, comment } = req.body;
+  const { postId, comment } = req.body; // Removido o userId do body
 
   try {
     const post = await Post.findById(postId);
@@ -74,8 +74,8 @@ router.post("/addComment", authMiddleware, async (req, res) => {
       return res.status(404).json({ msg: "Postagem não encontrada." });
     }
 
-    // Adiciona o comentário à postagem
-    post.comments.push({ userId, comment });
+    // Adiciona o comentário à postagem utilizando o ID do usuário autenticado
+    post.comments.push({ userId: req.user.id, comment });
     await post.save();
 
     // Busca o token do autor da postagem
@@ -105,9 +105,10 @@ router.post("/addComment", authMiddleware, async (req, res) => {
   }
 });
 
+
 // Curtir uma postagem
 router.post("/likePost", authMiddleware, async (req, res) => {
-  const { postId, userId } = req.body;
+  const { postId } = req.body; // Removido o userId do body
 
   try {
     const post = await Post.findById(postId);
@@ -115,9 +116,14 @@ router.post("/likePost", authMiddleware, async (req, res) => {
       return res.status(404).json({ msg: "Postagem não encontrada." });
     }
 
-    // Adiciona a curtida à postagem
-    post.likes.push(userId);
-    await post.save();
+    // Verifica se o usuário já curtiu a postagem para evitar múltiplas curtidas
+    if (!post.likes.includes(req.user.id)) {
+      // Adiciona a curtida à postagem utilizando o ID do usuário autenticado
+      post.likes.push(req.user.id);
+      await post.save();
+    } else {
+      return res.status(400).json({ msg: "Você já curtiu esta postagem." });
+    }
 
     // Busca o token do autor da postagem
     const postAuthor = await User.findById(post.userId);

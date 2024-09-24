@@ -3,7 +3,7 @@ const mongoose = require("mongoose");
 // Definindo o esquema de postagens da comunidade
 const PostSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true }, // Referência ao autor da postagem
-  content: { type: String, required: true }, // Conteúdo da postagem
+  content: { type: String, required }, // Conteúdo da postagem
   imageUrl: { type: String }, // URL opcional de imagem
   comments: [
     {

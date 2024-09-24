@@ -66,26 +66,23 @@ router.get("/posts", authMiddleware, async (req, res) => {
 
 // Adicionar um comentário a uma postagem
 router.post("/addComment", authMiddleware, async (req, res) => {
-  const { postId, comment } = req.body; // Removido o userId pois ele vem de req.user
+  const { postId, comment } = req.body;
 
   try {
-    // Encontra a postagem pelo ID
     const post = await Post.findById(postId);
     if (!post) {
       return res.status(404).json({ msg: "Postagem não encontrada." });
     }
 
-    // Adiciona o comentário à postagem
     const newComment = {
-      userId: req.user.id, // Pega o userId diretamente do usuário autenticado
+      userId: req.user.id,
       comment,
-      createdAt: new Date(), // Certifique-se de adicionar a data ao comentário
+      createdAt: new Date(),
     };
 
     post.comments.push(newComment);
     await post.save();
 
-    // Busca o token do autor da postagem
     const postAuthor = await User.findById(post.userId);
     if (postAuthor && postAuthor.deviceToken) {
       const message = {
@@ -95,7 +92,6 @@ router.post("/addComment", authMiddleware, async (req, res) => {
       await sendPushNotification(postAuthor.deviceToken, message);
     }
 
-    // Cria uma notificação interna para o autor da postagem
     const notification = new Notification({
       userId: post.userId,
       type: "comment",
@@ -103,10 +99,19 @@ router.post("/addComment", authMiddleware, async (req, res) => {
     });
     await notification.save();
 
-    // Retorna o comentário adicionado para o frontend com a estrutura correta
+    // Busca o nome do usuário que comentou
+    const commentingUser = await User.findById(req.user.id);
+
     res.status(200).json({
       msg: "Comentário adicionado e notificação enviada.",
-      comment: newComment, // Retorna o comentário que foi adicionado
+      comment: {
+        userId: {
+          id: req.user.id,
+          name: commentingUser.name,
+        },
+        comment: newComment.comment,
+        createdAt: newComment.createdAt,
+      },
     });
   } catch (error) {
     console.error(error.message);

@@ -109,27 +109,37 @@ router.post("/likePost", authMiddleware, async (req, res) => {
   const { postId } = req.body;
 
   try {
+    // Busca a postagem pelo ID
     const post = await Post.findById(postId);
     if (!post) {
+      console.error(`Postagem não encontrada para o ID: ${postId}`);
       return res.status(404).json({ msg: "Postagem não encontrada." });
     }
 
+    // Verifica se o usuário já curtiu a postagem
     if (!post.likes.includes(req.user.id)) {
       post.likes.push(req.user.id);
       await post.save();
     } else {
+      console.error(`Usuário ${req.user.id} já curtiu a postagem ${postId}.`);
       return res.status(400).json({ msg: "Você já curtiu esta postagem." });
     }
 
+    // Envia notificação push para o autor da postagem
     const postAuthor = await User.findById(post.userId);
     if (postAuthor && postAuthor.deviceToken) {
       const message = {
         title: "Nova Curtida!",
         body: `${req.user.name} curtiu sua postagem.`,
       };
-      await sendPushNotification(postAuthor.deviceToken, message);
+      try {
+        await sendPushNotification(postAuthor.deviceToken, message);
+      } catch (notificationError) {
+        console.error(`Erro ao enviar notificação: ${notificationError}`);
+      }
     }
 
+    // Salva a notificação no banco de dados
     const notification = new Notification({
       userId: post.userId,
       type: "like",
@@ -142,7 +152,34 @@ router.post("/likePost", authMiddleware, async (req, res) => {
       post: post.toObject(),
     });
   } catch (error) {
+    console.error(`Erro ao processar curtida: ${error}`);
     res.status(500).json({ msg: "Erro ao curtir postagem." });
+  }
+});
+
+// Rota para remover curtida de uma postagem
+router.post("/unlikePost", authMiddleware, async (req, res) => {
+  const { postId } = req.body;
+
+  try {
+    const post = await Post.findById(postId);
+    if (!post) {
+      return res.status(404).json({ msg: "Postagem não encontrada." });
+    }
+
+    // Verifica se o usuário já curtiu a postagem para remover a curtida
+    if (post.likes.includes(req.user.id)) {
+      post.likes = post.likes.filter(userId => userId.toString() !== req.user.id.toString());
+      await post.save();
+      console.log("Curtida removida:", req.user.id); // Log da remoção da curtida
+    } else {
+      return res.status(400).json({ msg: "Você não curtiu esta postagem." });
+    }
+
+    res.status(200).json({ msg: "Curtida removida com sucesso.", post: post.toObject() });
+  } catch (error) {
+    console.error("Erro ao remover curtida:", error.message);
+    res.status(500).json({ msg: "Erro ao remover curtida." });
   }
 });
 

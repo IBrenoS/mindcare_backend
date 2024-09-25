@@ -12,6 +12,7 @@ dayjs.extend(relativeTime);
 // Criar uma nova postagem
 router.post("/createPost", authMiddleware, async (req, res) => {
   const { content, imageUrl } = req.body;
+  console.log("Recebendo nova postagem:", { content, imageUrl }); // Log dos dados recebidos
 
   try {
     const newPost = new Post({
@@ -21,10 +22,10 @@ router.post("/createPost", authMiddleware, async (req, res) => {
     });
 
     await newPost.save();
-    // Retorne o objeto formatado corretamente
+    console.log("Postagem criada com sucesso:", newPost); // Log da nova postagem criada
     res.status(201).json(newPost.toObject());
   } catch (error) {
-    console.error(error.message);
+    console.error("Erro ao criar postagem:", error.message);
     res.status(500).json({ msg: "Erro ao criar postagem." });
   }
 });
@@ -33,6 +34,7 @@ router.post("/createPost", authMiddleware, async (req, res) => {
 router.get("/posts", authMiddleware, async (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
+  console.log(`Buscando postagens - Página: ${page}, Limite: ${limit}`); // Log de paginação
 
   try {
     const posts = await Post.find()
@@ -43,12 +45,12 @@ router.get("/posts", authMiddleware, async (req, res) => {
 
     const totalPosts = await Post.countDocuments();
 
-    // Converter todos os documentos para objetos simples
     const formattedPosts = posts.map((post) => ({
       ...post.toObject(),
       timeAgo: dayjs(post.createdAt).fromNow(),
     }));
 
+    console.log("Postagens formatadas:", formattedPosts); // Log das postagens formatadas
     res.json({
       posts: formattedPosts,
       currentPage: page,
@@ -56,7 +58,7 @@ router.get("/posts", authMiddleware, async (req, res) => {
       totalPosts,
     });
   } catch (error) {
-    console.error(error.message);
+    console.error("Erro ao recuperar postagens:", error.message);
     res.status(500).json({ msg: "Erro ao recuperar postagens." });
   }
 });
@@ -64,10 +66,12 @@ router.get("/posts", authMiddleware, async (req, res) => {
 // Adicionar um comentário a uma postagem
 router.post("/addComment", authMiddleware, async (req, res) => {
   const { postId, comment } = req.body;
+  console.log(`Adicionando comentário ao post ${postId}:`, comment); // Log do comentário recebido
 
   try {
     const post = await Post.findById(postId);
     if (!post) {
+      console.log("Postagem não encontrada:", postId); // Log de erro de post não encontrado
       return res.status(404).json({ msg: "Postagem não encontrada." });
     }
 
@@ -79,6 +83,7 @@ router.post("/addComment", authMiddleware, async (req, res) => {
 
     post.comments.push(newComment);
     await post.save();
+    console.log("Comentário adicionado:", newComment); // Log do novo comentário
 
     const postAuthor = await User.findById(post.userId);
     if (postAuthor && postAuthor.deviceToken) {
@@ -87,6 +92,7 @@ router.post("/addComment", authMiddleware, async (req, res) => {
         body: `${req.user.name} comentou na sua postagem.`,
       };
       await sendPushNotification(postAuthor.deviceToken, message);
+      console.log("Notificação enviada ao autor do post."); // Log da notificação
     }
 
     const notification = new Notification({
@@ -95,14 +101,14 @@ router.post("/addComment", authMiddleware, async (req, res) => {
       content: `${req.user.name} comentou na sua postagem.`,
     });
     await notification.save();
+    console.log("Notificação interna salva:", notification); // Log da notificação interna
 
-    // Retornar o post atualizado com o novo comentário corretamente formatado
     res.status(200).json({
       msg: "Comentário adicionado e notificação enviada.",
       post: post.toObject(),
     });
   } catch (error) {
-    console.error(error.message);
+    console.error("Erro ao adicionar comentário:", error.message);
     res.status(500).json({ msg: "Erro ao adicionar comentário." });
   }
 });
@@ -110,17 +116,21 @@ router.post("/addComment", authMiddleware, async (req, res) => {
 // Curtir uma postagem
 router.post("/likePost", authMiddleware, async (req, res) => {
   const { postId } = req.body;
+  console.log(`Curtindo post ${postId}`); // Log ao curtir post
 
   try {
     const post = await Post.findById(postId);
     if (!post) {
+      console.log("Postagem não encontrada:", postId); // Log de erro de post não encontrado
       return res.status(404).json({ msg: "Postagem não encontrada." });
     }
 
     if (!post.likes.includes(req.user.id)) {
       post.likes.push(req.user.id);
       await post.save();
+      console.log("Curtida adicionada:", req.user.id); // Log da curtida adicionada
     } else {
+      console.log("Usuário já curtiu a postagem:", req.user.id); // Log de curtida duplicada
       return res.status(400).json({ msg: "Você já curtiu esta postagem." });
     }
 
@@ -131,6 +141,7 @@ router.post("/likePost", authMiddleware, async (req, res) => {
         body: `${req.user.name} curtiu sua postagem.`,
       };
       await sendPushNotification(postAuthor.deviceToken, message);
+      console.log("Notificação de curtida enviada ao autor do post."); // Log da notificação de curtida
     }
 
     const notification = new Notification({
@@ -139,16 +150,14 @@ router.post("/likePost", authMiddleware, async (req, res) => {
       content: `${req.user.name} curtiu sua postagem.`,
     });
     await notification.save();
+    console.log("Notificação de curtida salva:", notification); // Log da notificação interna de curtida
 
-    // Retornar o post atualizado corretamente formatado
-    res
-      .status(200)
-      .json({
-        msg: "Curtida adicionada e notificação enviada.",
-        post: post.toObject(),
-      });
+    res.status(200).json({
+      msg: "Curtida adicionada e notificação enviada.",
+      post: post.toObject(),
+    });
   } catch (error) {
-    console.error(error.message);
+    console.error("Erro ao curtir postagem:", error.message);
     res.status(500).json({ msg: "Erro ao curtir postagem." });
   }
 });

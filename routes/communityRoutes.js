@@ -12,7 +12,6 @@ dayjs.extend(relativeTime);
 // Criar uma nova postagem
 router.post("/createPost", authMiddleware, async (req, res) => {
   const { content, imageUrl } = req.body;
-  console.log("Recebendo nova postagem:", { content, imageUrl }); // Log dos dados recebidos
 
   try {
     const newPost = new Post({
@@ -22,10 +21,8 @@ router.post("/createPost", authMiddleware, async (req, res) => {
     });
 
     await newPost.save();
-    console.log("Postagem criada com sucesso:", newPost); // Log da nova postagem criada
     res.status(201).json(newPost.toObject());
   } catch (error) {
-    console.error("Erro ao criar postagem:", error.message);
     res.status(500).json({ msg: "Erro ao criar postagem." });
   }
 });
@@ -37,8 +34,8 @@ router.get("/posts", authMiddleware, async (req, res) => {
 
   try {
     const posts = await Post.find()
-      .populate("userId", ["name", "photoUrl"]) // Popula o usuário da postagem
-      .populate("comments.userId", ["name", "photoUrl"]) // Popula o usuário dos comentários
+      .populate("userId", ["name", "photoUrl"])
+      .populate("comments.userId", ["name", "photoUrl"])
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit);
@@ -57,11 +54,9 @@ router.get("/posts", authMiddleware, async (req, res) => {
       totalPosts,
     });
   } catch (error) {
-    console.error(error.message);
     res.status(500).json({ msg: "Erro ao recuperar postagens." });
   }
 });
-
 
 // Adicionar um comentário a uma postagem
 router.post("/addComment", authMiddleware, async (req, res) => {
@@ -82,8 +77,7 @@ router.post("/addComment", authMiddleware, async (req, res) => {
     post.comments.push(newComment);
     await post.save();
 
-    // Popula os campos userId dos comentários sem execPopulate
-    await post.populate('comments.userId', 'name photoUrl');
+    await post.populate("comments.userId", "name photoUrl");
 
     const postAuthor = await User.findById(post.userId);
     if (postAuthor && postAuthor.deviceToken) {
@@ -106,7 +100,6 @@ router.post("/addComment", authMiddleware, async (req, res) => {
       post: post.toObject(),
     });
   } catch (error) {
-    console.error(error.message);
     res.status(500).json({ msg: "Erro ao adicionar comentário." });
   }
 });
@@ -114,21 +107,17 @@ router.post("/addComment", authMiddleware, async (req, res) => {
 // Curtir uma postagem
 router.post("/likePost", authMiddleware, async (req, res) => {
   const { postId } = req.body;
-  console.log(`Curtindo post ${postId}`); // Log ao curtir post
 
   try {
     const post = await Post.findById(postId);
     if (!post) {
-      console.log("Postagem não encontrada:", postId); // Log de erro de post não encontrado
       return res.status(404).json({ msg: "Postagem não encontrada." });
     }
 
     if (!post.likes.includes(req.user.id)) {
       post.likes.push(req.user.id);
       await post.save();
-      console.log("Curtida adicionada:", req.user.id); // Log da curtida adicionada
     } else {
-      console.log("Usuário já curtiu a postagem:", req.user.id); // Log de curtida duplicada
       return res.status(400).json({ msg: "Você já curtiu esta postagem." });
     }
 
@@ -139,7 +128,6 @@ router.post("/likePost", authMiddleware, async (req, res) => {
         body: `${req.user.name} curtiu sua postagem.`,
       };
       await sendPushNotification(postAuthor.deviceToken, message);
-      console.log("Notificação de curtida enviada ao autor do post."); // Log da notificação de curtida
     }
 
     const notification = new Notification({
@@ -148,14 +136,12 @@ router.post("/likePost", authMiddleware, async (req, res) => {
       content: `${req.user.name} curtiu sua postagem.`,
     });
     await notification.save();
-    console.log("Notificação de curtida salva:", notification); // Log da notificação interna de curtida
 
     res.status(200).json({
       msg: "Curtida adicionada e notificação enviada.",
       post: post.toObject(),
     });
   } catch (error) {
-    console.error("Erro ao curtir postagem:", error.message);
     res.status(500).json({ msg: "Erro ao curtir postagem." });
   }
 });

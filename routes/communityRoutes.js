@@ -34,11 +34,11 @@ router.post("/createPost", authMiddleware, async (req, res) => {
 router.get("/posts", authMiddleware, async (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
-  console.log(`Buscando postagens - Página: ${page}, Limite: ${limit}`); // Log de paginação
 
   try {
     const posts = await Post.find()
-      .populate("userId", ["name", "photoUrl"])
+      .populate("userId", ["name", "photoUrl"]) // Popula o usuário da postagem
+      .populate("comments.userId", ["name", "photoUrl"]) // Popula o usuário dos comentários
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit);
@@ -50,7 +50,6 @@ router.get("/posts", authMiddleware, async (req, res) => {
       timeAgo: dayjs(post.createdAt).fromNow(),
     }));
 
-    console.log("Postagens formatadas:", formattedPosts); // Log das postagens formatadas
     res.json({
       posts: formattedPosts,
       currentPage: page,
@@ -58,20 +57,19 @@ router.get("/posts", authMiddleware, async (req, res) => {
       totalPosts,
     });
   } catch (error) {
-    console.error("Erro ao recuperar postagens:", error.message);
+    console.error(error.message);
     res.status(500).json({ msg: "Erro ao recuperar postagens." });
   }
 });
 
+
 // Adicionar um comentário a uma postagem
 router.post("/addComment", authMiddleware, async (req, res) => {
   const { postId, comment } = req.body;
-  console.log(`Adicionando comentário ao post ${postId}:`, comment); // Log do comentário recebido
 
   try {
     const post = await Post.findById(postId);
     if (!post) {
-      console.log("Postagem não encontrada:", postId); // Log de erro de post não encontrado
       return res.status(404).json({ msg: "Postagem não encontrada." });
     }
 
@@ -83,7 +81,9 @@ router.post("/addComment", authMiddleware, async (req, res) => {
 
     post.comments.push(newComment);
     await post.save();
-    console.log("Comentário adicionado:", newComment); // Log do novo comentário
+
+    // Populate `userId` for comments
+    await post.populate('comments.userId', 'name photoUrl').execPopulate();
 
     const postAuthor = await User.findById(post.userId);
     if (postAuthor && postAuthor.deviceToken) {
@@ -92,7 +92,6 @@ router.post("/addComment", authMiddleware, async (req, res) => {
         body: `${req.user.name} comentou na sua postagem.`,
       };
       await sendPushNotification(postAuthor.deviceToken, message);
-      console.log("Notificação enviada ao autor do post."); // Log da notificação
     }
 
     const notification = new Notification({
@@ -101,17 +100,17 @@ router.post("/addComment", authMiddleware, async (req, res) => {
       content: `${req.user.name} comentou na sua postagem.`,
     });
     await notification.save();
-    console.log("Notificação interna salva:", notification); // Log da notificação interna
 
     res.status(200).json({
       msg: "Comentário adicionado e notificação enviada.",
       post: post.toObject(),
     });
   } catch (error) {
-    console.error("Erro ao adicionar comentário:", error.message);
+    console.error(error.message);
     res.status(500).json({ msg: "Erro ao adicionar comentário." });
   }
 });
+
 
 // Curtir uma postagem
 router.post("/likePost", authMiddleware, async (req, res) => {

@@ -82,8 +82,8 @@ router.post("/addComment", authMiddleware, async (req, res) => {
     post.comments.push(newComment);
     await post.save();
 
-    // Populate `userId` for comments
-    await post.populate('comments.userId', 'name photoUrl').execPopulate();
+    // Popula os campos userId dos comentários sem execPopulate
+    await post.populate('comments.userId', 'name photoUrl');
 
     const postAuthor = await User.findById(post.userId);
     if (postAuthor && postAuthor.deviceToken) {
@@ -110,7 +110,6 @@ router.post("/addComment", authMiddleware, async (req, res) => {
     res.status(500).json({ msg: "Erro ao adicionar comentário." });
   }
 });
-
 
 // Curtir uma postagem
 router.post("/likePost", authMiddleware, async (req, res) => {

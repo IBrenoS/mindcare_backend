@@ -114,71 +114,45 @@ router.post("/likePost", authMiddleware, async (req, res) => {
       return res.status(404).json({ msg: "Postagem não encontrada." });
     }
 
-    // Verifica se o usuário já curtiu a postagem
-    const userLikedIndex = post.likes.indexOf(req.user.id);
+    const userId = req.user.id;
+    const isLiked = post.likes.includes(userId);
 
-    if (userLikedIndex === -1) {
-      // Se o usuário ainda não curtiu, adiciona a curtida
-      post.likes.push(req.user.id);
-      console.log(`Usuário ${req.user.id} curtiu a postagem ${postId}.`);
+    if (isLiked) {
+      // Remove a curtida
+      post.likes = post.likes.filter((id) => id.toString() !== userId);
+      await post.save();
+      console.log(`Usuário ${userId} removeu a curtida da postagem ${postId}`);
     } else {
-      // Se o usuário já curtiu, remove a curtida
-      post.likes.splice(userLikedIndex, 1);
-      console.log(`Usuário ${req.user.id} removeu a curtida da postagem ${postId}.`);
+      // Adiciona a curtida
+      post.likes.push(userId);
+      await post.save();
+      console.log(`Usuário ${userId} curtiu a postagem ${postId}`);
+
+      const postAuthor = await User.findById(post.userId);
+      if (postAuthor && postAuthor.deviceToken) {
+        const message = {
+          title: "Nova Curtida!",
+          body: `${req.user.name} curtiu sua postagem.`,
+        };
+        await sendPushNotification(postAuthor.deviceToken, message);
+      }
+
+      const notification = new Notification({
+        userId: post.userId,
+        type: "like", // Somente cria notificação para 'like'
+        content: `${req.user.name} curtiu sua postagem.`,
+      });
+      await notification.save();
+      console.log("Notificação de curtida salva:", notification);
     }
-
-    await post.save();
-
-    const postAuthor = await User.findById(post.userId);
-    if (postAuthor && postAuthor.deviceToken) {
-      const message = {
-        title: userLikedIndex === -1 ? "Nova Curtida!" : "Curtida Removida!",
-        body: `${req.user.name} ${userLikedIndex === -1 ? "curtiu" : "removeu a curtida de"} sua postagem.`,
-      };
-      await sendPushNotification(postAuthor.deviceToken, message);
-    }
-
-    const notification = new Notification({
-      userId: post.userId,
-      type: userLikedIndex === -1 ? "like" : "unlike",
-      content: `${req.user.name} ${userLikedIndex === -1 ? "curtiu" : "removeu a curtida de"} sua postagem.`,
-    });
-    await notification.save();
 
     res.status(200).json({
-      msg: userLikedIndex === -1 ? "Curtida adicionada e notificação enviada." : "Curtida removida e notificação enviada.",
+      msg: isLiked ? "Curtida removida." : "Curtida adicionada e notificação enviada.",
       post: post.toObject(),
     });
   } catch (error) {
     console.error("Erro ao atualizar curtida da postagem:", error.message);
-    res.status(500).json({ msg: "Erro ao atualizar curtida da postagem." });
-  }
-});
-
-
-// Rota para remover curtida de uma postagem
-router.post("/unlikePost", authMiddleware, async (req, res) => {
-  const { postId } = req.body;
-
-  try {
-    const post = await Post.findById(postId);
-    if (!post) {
-      return res.status(404).json({ msg: "Postagem não encontrada." });
-    }
-
-    // Verifica se o usuário já curtiu a postagem para remover a curtida
-    if (post.likes.includes(req.user.id)) {
-      post.likes = post.likes.filter(userId => userId.toString() !== req.user.id.toString());
-      await post.save();
-      console.log("Curtida removida:", req.user.id); // Log da remoção da curtida
-    } else {
-      return res.status(400).json({ msg: "Você não curtiu esta postagem." });
-    }
-
-    res.status(200).json({ msg: "Curtida removida com sucesso.", post: post.toObject() });
-  } catch (error) {
-    console.error("Erro ao remover curtida:", error.message);
-    res.status(500).json({ msg: "Erro ao remover curtida." });
+    res.status(500).json({ msg: "Erro ao atualizar curtida." });
   }
 });
 

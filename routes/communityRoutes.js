@@ -27,7 +27,7 @@ router.post("/createPost", authMiddleware, async (req, res) => {
   }
 });
 
-// Listar todas as postagens com paginação
+// Atualização na função de listar postagens
 router.get("/posts", authMiddleware, async (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
@@ -42,9 +42,11 @@ router.get("/posts", authMiddleware, async (req, res) => {
 
     const totalPosts = await Post.countDocuments();
 
+    // Modifica o retorno para incluir se o usuário curtiu a postagem
     const formattedPosts = posts.map((post) => ({
       ...post.toObject(),
       timeAgo: dayjs(post.createdAt).fromNow(),
+      isLikedByCurrentUser: post.likes.includes(req.user.id), // Indica se o usuário atual curtiu
     }));
 
     res.json({
@@ -54,6 +56,7 @@ router.get("/posts", authMiddleware, async (req, res) => {
       totalPosts,
     });
   } catch (error) {
+    console.error(error.message);
     res.status(500).json({ msg: "Erro ao recuperar postagens." });
   }
 });

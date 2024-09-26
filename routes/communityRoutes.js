@@ -4,28 +4,63 @@ const Post = require("../models/post");
 const User = require("../models/user");
 const Notification = require("../models/notification");
 const sendPushNotification = require("../services/sendPushNotification");
+const upload = require("../middlewares/upload"); // Middleware de upload reutilizável
+const { uploadImageToCloudinary } = require("../services/cloudinary"); // Função de upload para o Cloudinary
 const router = express.Router();
 const dayjs = require("dayjs");
 const relativeTime = require("dayjs/plugin/relativeTime");
 dayjs.extend(relativeTime);
 
-// Criar uma nova postagem
-router.post("/createPost", authMiddleware, async (req, res) => {
-  const { content, imageUrl } = req.body;
+async function uploadImageToCloudinary(buffer) {
+  return new Promise((resolve, reject) => {
+    cloudinary.uploader
+      .upload_stream({ resource_type: "image" }, (error, result) => {
+        if (error) {
+          console.error("Erro no upload para o Cloudinary:", error);
+          return reject(error);
+        }
+        if (!result || !result.secure_url) {
+          console.error("Erro: Resposta inesperada do Cloudinary:", result);
+          return reject(new Error("Erro ao processar upload no Cloudinary."));
+        }
+        resolve(result);
+      })
+      .end(buffer);
+  });
+}
 
-  try {
-    const newPost = new Post({
-      userId: req.user.id,
-      content,
-      imageUrl,
-    });
 
-    await newPost.save();
-    res.status(201).json(newPost.toObject());
-  } catch (error) {
-    res.status(500).json({ msg: "Erro ao criar postagem." });
+// Criar uma nova postagem com imagem
+router.post(
+  "/createPost",
+  authMiddleware,
+  upload.single("image"),
+  async (req, res) => {
+    const { content } = req.body;
+    let uploadedImageUrl;
+
+    try {
+      // Verifica se uma imagem foi enviada e faz o upload para o Cloudinary
+      if (req.file) {
+        const result = await uploadImageToCloudinary(req.file.buffer);
+        uploadedImageUrl = result.secure_url; // URL da imagem carregada no Cloudinary
+      }
+
+      // Cria a nova postagem com a URL da imagem carregada, se existir
+      const newPost = new Post({
+        userId: req.user.id,
+        content,
+        imageUrl: uploadedImageUrl, // Salva a URL da imagem carregada ou undefined se não tiver imagem
+      });
+
+      await newPost.save();
+      res.status(201).json(newPost.toObject());
+    } catch (error) {
+      console.error("Erro ao criar postagem:", error.message);
+      res.status(500).json({ msg: "Erro ao criar postagem." });
+    }
   }
-});
+);
 
 // Atualização na função de listar postagens
 router.get("/posts", authMiddleware, async (req, res) => {
@@ -56,7 +91,7 @@ router.get("/posts", authMiddleware, async (req, res) => {
       totalPosts,
     });
   } catch (error) {
-    console.error(error.message);
+    console.error("Erro ao recuperar postagens:", error.message);
     res.status(500).json({ msg: "Erro ao recuperar postagens." });
   }
 });
@@ -142,7 +177,9 @@ router.post("/likePost", authMiddleware, async (req, res) => {
     }
 
     res.status(200).json({
-      msg: isLiked ? "Curtida removida." : "Curtida adicionada e notificação enviada.",
+      msg: isLiked
+        ? "Curtida removida."
+        : "Curtida adicionada e notificação enviada.",
       post: post.toObject(),
     });
   } catch (error) {

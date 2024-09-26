@@ -4,12 +4,15 @@ const Post = require("../models/post");
 const User = require("../models/user");
 const Notification = require("../models/notification");
 const sendPushNotification = require("../services/sendPushNotification");
-const upload = require("../middlewares/upload"); // Middleware de upload reutilizável
-const { uploadImageToCloudinary } = require("../services/cloudinary"); // Função de upload para o Cloudinary
+const cloudinary = require("../config/cloudinary");
+const multer = require("multer");
 const router = express.Router();
 const dayjs = require("dayjs");
 const relativeTime = require("dayjs/plugin/relativeTime");
 dayjs.extend(relativeTime);
+
+const storage = multer.memoryStorage();
+const upload = multer({ storage: storage });
 
 async function uploadImageToCloudinary(buffer) {
   return new Promise((resolve, reject) => {

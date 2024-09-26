@@ -139,14 +139,6 @@ router.post("/likePost", authMiddleware, async (req, res) => {
         };
         await sendPushNotification(postAuthor.deviceToken, message);
       }
-
-      const notification = new Notification({
-        userId: post.userId,
-        type: "like", // Somente cria notificação para 'like'
-        content: `${req.user.name} curtiu sua postagem.`,
-      });
-      await notification.save();
-      console.log("Notificação de curtida salva:", notification);
     }
 
     res.status(200).json({

@@ -14,31 +14,57 @@ async function getSupportPointsFromHere(latitude, longitude) {
   return response.data.items; // Retorna os locais encontrados
 }
 
+// Função para calcular a distância entre dois pontos (em km)
+function haversineDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371; // Raio da Terra em km
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
 // Rota para buscar pontos de apoio automaticamente usando Here API e cache no MongoDB
 router.get("/nearby", async (req, res) => {
   const { latitude, longitude } = req.query;
+  const searchRadius = 0.5; // Raio de busca em km para utilizar o cache
 
   if (!latitude || !longitude) {
-    return res
-      .status(400)
-      .json({ msg: "Latitude e longitude são obrigatórias." });
+    return res.status(400).json({ msg: "Latitude e longitude são obrigatórias." });
   }
 
   try {
-    // Verifica se a resposta já está no cache do MongoDB
-    const cachedResult = await GeoCache.findOne({ latitude, longitude });
+    // Busca entradas de cache próximas considerando um raio (ex: 500 metros)
+    const cachedResults = await GeoCache.find({
+      latitude: { $gte: latitude - 0.005, $lte: latitude + 0.005 },
+      longitude: { $gte: longitude - 0.005, $lte: longitude + 0.005 },
+    });
 
-    if (cachedResult) {
-      // Se houver dados no cache, retorna-os diretamente
-      return res.json(cachedResult.data);
+    // Filtra resultados no cache pelo raio de proximidade usando Haversine
+    const validCache = cachedResults.find((cache) => {
+      const distance = haversineDistance(
+        latitude,
+        longitude,
+        cache.latitude,
+        cache.longitude
+      );
+      return distance <= searchRadius;
+    });
+
+    if (validCache) {
+      // Se houver dados no cache dentro do raio, retorna-os diretamente
+      return res.json(validCache.data);
     } else {
       // Se não houver no cache, faz a consulta à API Here
       const supportPoints = await getSupportPointsFromHere(latitude, longitude);
 
       if (supportPoints.length === 0) {
-        return res
-          .status(404)
-          .json({ msg: "Nenhum ponto de apoio encontrado." });
+        return res.status(404).json({ msg: "Nenhum ponto de apoio encontrado." });
       }
 
       // Armazena o resultado no cache do MongoDB

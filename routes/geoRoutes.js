@@ -7,7 +7,7 @@ const router = express.Router();
 const HERE_API_KEY = process.env.HERE_API_KEY;
 
 // Função para buscar pontos de apoio pela Here API
-sync function getSupportPointsFromHere(latitude, longitude) {
+async function getSupportPointsFromHere(latitude, longitude) {
   const hereUrl = `https://discover.search.hereapi.com/v1/discover?at=${latitude},${longitude}&q=clínica de saúde mental, CRAS, centro de apoio&limit=20&apiKey=${HERE_API_KEY}`;
   try {
     const response = await axios.get(hereUrl);

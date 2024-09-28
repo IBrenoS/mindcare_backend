@@ -14,51 +14,31 @@ async function getSupportPointsFromHere(latitude, longitude) {
   return response.data.items; // Retorna os locais encontrados
 }
 
-// Função para calcular a distância entre dois pontos (em km)
-function haversineDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371; // Raio da Terra em km
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
+// Função para converter as coordenadas para números e tratar erros de entrada
+function parseCoordinates(lat, lon) {
+  const latitude = parseFloat(lat);
+  const longitude = parseFloat(lon);
+
+  if (isNaN(latitude) || isNaN(longitude)) {
+    throw new Error("Invalid coordinates format");
+  }
+  return { latitude, longitude };
 }
 
 // Rota para buscar pontos de apoio automaticamente usando Here API e cache no MongoDB
 router.get("/nearby", async (req, res) => {
-  const { latitude, longitude } = req.query;
-  const searchRadius = 0.5; // Raio de busca em km para utilizar o cache
-
-  if (!latitude || !longitude) {
-    return res.status(400).json({ msg: "Latitude e longitude são obrigatórias." });
-  }
-
   try {
-    // Busca entradas de cache próximas considerando um raio (ex: 500 metros)
-    const cachedResults = await GeoCache.find({
-      latitude: { $gte: latitude - 0.005, $lte: latitude + 0.005 },
-      longitude: { $gte: longitude - 0.005, $lte: longitude + 0.005 },
-    });
+    const { latitude: lat, longitude: lon } = req.query;
 
-    // Filtra resultados no cache pelo raio de proximidade usando Haversine
-    const validCache = cachedResults.find((cache) => {
-      const distance = haversineDistance(
-        latitude,
-        longitude,
-        cache.latitude,
-        cache.longitude
-      );
-      return distance <= searchRadius;
-    });
+    // Converte e valida as coordenadas
+    const { latitude, longitude } = parseCoordinates(lat, lon);
 
-    if (validCache) {
-      // Se houver dados no cache dentro do raio, retorna-os diretamente
-      return res.json(validCache.data);
+    // Verifica se a resposta já está no cache do MongoDB
+    const cachedResult = await GeoCache.findOne({ latitude, longitude });
+
+    if (cachedResult) {
+      // Se houver dados no cache, retorna-os diretamente
+      return res.json(cachedResult.data);
     } else {
       // Se não houver no cache, faz a consulta à API Here
       const supportPoints = await getSupportPointsFromHere(latitude, longitude);
@@ -81,7 +61,7 @@ router.get("/nearby", async (req, res) => {
     }
   } catch (error) {
     console.error("Erro ao buscar pontos de apoio:", error.message);
-    res.status(500).json({ msg: "Erro no servidor." });
+    res.status(500).json({ msg: "Erro ao buscar pontos de apoio: " + error.message });
   }
 });
 

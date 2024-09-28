@@ -148,7 +148,9 @@ router.get("/nearby", nearbyLimiter, async (req, res, next) => {
 
       // Armazenar resultados no cache
       const newCacheEntry = new GeoCache({
-        ...cacheKey,
+        latitude,
+        longitude,
+        queries,
         data: results,
       });
 

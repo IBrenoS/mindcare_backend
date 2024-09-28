@@ -1,15 +1,13 @@
-const mongoose = require("mongoose");
+const mongoose = require('mongoose');
 
-const geoCacheSchema = new mongoose.Schema({
-  latitude: { type: Number, required: true },
-  longitude: { type: Number, required: true },
-  query: { type: String, required: true },
-  data: { type: Array, required: true },
-  createdAt: {
-    type: Date,
-    default: Date.now,
-    expires: 3600,
+const GeoCacheSchema = new mongoose.Schema({
+  latitude: Number,
+  longitude: Number,
+  queries: {
+    type: [String],
+    required: true,
   },
+  data: Array,
 });
 
-module.exports = mongoose.model("GeoCache", geoCacheSchema);
+module.exports = mongoose.model('GeoCache', GeoCacheSchema);

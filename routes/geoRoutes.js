@@ -3,59 +3,71 @@ const axios = require("axios");
 const GeoCache = require("../models/geoCache");
 const router = express.Router();
 
-// Chave da API do Here Geocoding
-const HERE_API_KEY = process.env.HERE_API_KEY;
+// Chave da API do Google Places
+const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY;
 
-// Função para buscar pontos de apoio pela Here API
-async function getSupportPointsFromHere(latitude, longitude) {
-  const hereUrl = `https://discover.search.hereapi.com/v1/discover?at=${latitude},${longitude}&q=centro+de+apoio&limit=10&apiKey=${HERE_API_KEY}`;
-
-  const response = await axios.get(hereUrl);
-  return response.data.items; // Retorna os locais encontrados
+// Função para buscar pontos de apoio pela Google Places API
+async function getSupportPointsFromGoogle(latitude, longitude, query) {
+  const googleUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(
+    query
+  )}&location=${latitude},${longitude}&radius=5000&key=${GOOGLE_PLACES_API_KEY}`;
+  try {
+    const response = await axios.get(googleUrl);
+    // Filtra resultados para exibir apenas os que sejam relevantes
+    return response.data.results.map((item) => ({
+      id: item.place_id,
+      title: item.name || "Ponto de Apoio",
+      position: {
+        lat: item.geometry.location.lat,
+        lng: item.geometry.location.lng,
+      },
+      address: item.formatted_address,
+      type: item.types.includes("health") ? "public" : "private",
+    }));
+  } catch (error) {
+    console.error("Erro na API Google Places:", error.message);
+    throw new Error("Erro ao buscar pontos de apoio externos.");
+  }
 }
 
-// Rota para buscar pontos de apoio automaticamente usando Here API e cache no MongoDB
+// Rota para buscar pontos de apoio usando Google Places API e cache no MongoDB
 router.get("/nearby", async (req, res) => {
-  const { latitude, longitude } = req.query;
-
-  if (!latitude || !longitude) {
-    return res
-      .status(400)
-      .json({ msg: "Latitude e longitude são obrigatórias." });
-  }
-
   try {
-    // Verifica se a resposta já está no cache do MongoDB
-    const cachedResult = await GeoCache.findOne({ latitude, longitude });
+    const { latitude: lat, longitude: lon, query } = req.query;
+    const latitude = parseFloat(lat);
+    const longitude = parseFloat(lon);
 
-    if (cachedResult) {
-      // Se houver dados no cache, retorna-os diretamente
-      return res.json(cachedResult.data);
-    } else {
-      // Se não houver no cache, faz a consulta à API Here
-      const supportPoints = await getSupportPointsFromHere(latitude, longitude);
-
-      if (supportPoints.length === 0) {
-        return res
-          .status(404)
-          .json({ msg: "Nenhum ponto de apoio encontrado." });
-      }
-
-      // Armazena o resultado no cache do MongoDB
-      const newCacheEntry = new GeoCache({
-        latitude,
-        longitude,
-        data: supportPoints,
-      });
-
-      await newCacheEntry.save();
-
-      // Retorna os pontos de apoio encontrados
-      res.json(supportPoints);
+    if (isNaN(latitude) || isNaN(longitude)) {
+      return res.status(400).json({ msg: "Coordenadas inválidas." });
     }
+
+    // Busca pontos usando Google Places com o termo passado (ex: "clínica de saúde mental")
+    const supportPoints = await getSupportPointsFromGoogle(
+      latitude,
+      longitude,
+      query || "centro de apoio"
+    );
+
+    if (supportPoints.length === 0) {
+      return res.status(404).json({ msg: "Nenhum ponto de apoio encontrado." });
+    }
+
+    // Opcional: armazenar resultado no cache para otimizar futuras buscas
+    const newCacheEntry = new GeoCache({
+      latitude,
+      longitude,
+      data: supportPoints,
+    });
+
+    await newCacheEntry.save();
+
+    // Retorna os pontos de apoio encontrados
+    res.json(supportPoints);
   } catch (error) {
     console.error("Erro ao buscar pontos de apoio:", error.message);
-    res.status(500).json({ msg: "Erro no servidor." });
+    res
+      .status(500)
+      .json({ msg: "Erro ao buscar pontos de apoio: " + error.message });
   }
 });
 

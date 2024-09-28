@@ -6,10 +6,12 @@ const Notification = require("../models/notification");
 const sendPushNotification = require("../services/sendPushNotification");
 const cloudinary = require("../config/cloudinary");
 const multer = require("multer");
-const router = express.Router();
 const dayjs = require("dayjs");
 const relativeTime = require("dayjs/plugin/relativeTime");
 dayjs.extend(relativeTime);
+
+
+const router = express.Router();
 
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
@@ -34,10 +36,7 @@ async function uploadImageToCloudinary(buffer) {
 
 
 // Criar uma nova postagem com imagem
-router.post(
-  "/createPost",
-  authMiddleware,
-  upload.single("image"),
+router.post("/createPost", authMiddleware, upload.single("image"),
   async (req, res) => {
     const { content } = req.body;
     let uploadedImageUrl;

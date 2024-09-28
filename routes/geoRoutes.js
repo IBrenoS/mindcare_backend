@@ -7,20 +7,23 @@ const router = express.Router();
 const HERE_API_KEY = process.env.HERE_API_KEY;
 
 // Função para buscar pontos de apoio pela Here API
-async function getSupportPointsFromHere(latitude, longitude) {
-  const hereUrl = `https://discover.search.hereapi.com/v1/discover?at=${latitude},${longitude}&q=centro+de+apoio&limit=10&apiKey=${HERE_API_KEY}`;
+sync function getSupportPointsFromHere(latitude, longitude) {
+  const hereUrl = `https://discover.search.hereapi.com/v1/discover?at=${latitude},${longitude}&q=clínica de saúde mental, CRAS, centro de apoio&limit=20&apiKey=${HERE_API_KEY}`;
   try {
     const response = await axios.get(hereUrl);
-    return response.data.items.map((item) => ({
-      id: item.id,
-      title: item.title || "Ponto de Apoio",
-      position: {
-        lat: item.position.lat,
-        lng: item.position.lng,
-      },
-      address: item.address,
-      type: item.categories?.[0]?.id === "health-care" ? "public" : "private", // Exemplo de categorização
-    })); // Mapeia os locais encontrados para o formato necessário
+    // Filtra pontos relevantes e mapeia para o formato necessário
+    return response.data.items
+      .filter((item) => item.categories.some(category => category.id.includes('health-care') || category.id.includes('social-services')))
+      .map((item) => ({
+        id: item.id,
+        title: item.title || "Ponto de Apoio",
+        position: {
+          lat: item.position.lat,
+          lng: item.position.lng,
+        },
+        address: item.address,
+        type: item.categories[0]?.id === "health-care" ? "public" : "private",
+      }));
   } catch (error) {
     console.error("Erro na API Here:", error.message);
     throw new Error("Erro ao buscar pontos de apoio externos.");

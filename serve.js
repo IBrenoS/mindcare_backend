@@ -5,6 +5,10 @@ const cors = require("cors");
 const path = require("path");
 
 const app = express();
+
+// **Adicione esta linha abaixo**
+app.set('trust proxy', 1);
+
 app.use(cors());
 app.use(express.json());
 
@@ -14,11 +18,10 @@ mongoose
   .then(() => console.log("Conectado ao MongoDB Atlas"))
   .catch((error) => console.error("Erro ao conectar ao MongoDB:", error));
 
-  // Rota para servir o assetlinks.json
+// Rota para servir o assetlinks.json
 app.get("/.well-known/assetlinks.json", (req, res) => {
   res.sendFile(path.join(__dirname, ".well-known", "assetlinks.json"));
 });
-
 
 // Rotas principais
 app.use("/auth", require("./routes/authRoutes"));

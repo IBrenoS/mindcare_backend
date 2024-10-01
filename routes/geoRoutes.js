@@ -123,6 +123,7 @@ router.get("/nearby", nearbyLimiter, async (req, res, next) => {
     const pageNumber = parseInt(page);
     const limitNumber = parseInt(limit);
 
+    // Validação das coordenadas
     if (isNaN(latitude) || isNaN(longitude)) {
       return res.status(400).json({ msg: "Coordenadas inválidas." });
     }
@@ -135,6 +136,22 @@ router.get("/nearby", nearbyLimiter, async (req, res, next) => {
     let queries = ["CRAS", "Clínicas de Saúde Mental"];
     if (query) {
       queries = query.split(",").map((q) => q.trim());
+    }
+
+    // Validação do parâmetro "type"
+    const validTypes = ["public", "private"];
+    if (type && !validTypes.includes(type)) {
+      return res
+        .status(400)
+        .json({ msg: "Tipo inválido. Use 'public' ou 'private'." });
+    }
+
+    // Validação do parâmetro "sortBy"
+    const validSortOptions = ["distance", "rating"];
+    if (sortBy && !validSortOptions.includes(sortBy)) {
+      return res
+        .status(400)
+        .json({ msg: "Ordenação inválida. Use 'distance' ou 'rating'." });
     }
 
     // Chave do cache
@@ -160,9 +177,13 @@ router.get("/nearby", nearbyLimiter, async (req, res, next) => {
       );
 
       if (results.length === 0) {
-        return res
-          .status(404)
-          .json({ msg: "Nenhum ponto de apoio encontrado." });
+        return res.status(200).json({
+          msg: "Nenhum ponto de apoio encontrado.",
+          results: [],
+          totalResults: 0,
+          page: pageNumber,
+          totalPages: 0,
+        });
       }
 
       // Armazenar resultados no cache

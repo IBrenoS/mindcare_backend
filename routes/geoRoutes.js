@@ -35,59 +35,74 @@ function getDistance(lat1, lon1, lat2, lon2) {
 }
 
 // Função para buscar pontos de apoio pela API do Google Places
-async function getSupportPointsFromGoogle(latitude, longitude, query, nextPageToken) {
-  let googleUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(
-    query
-  )}&location=${latitude},${longitude}&radius=5000&key=${GOOGLE_PLACES_API_KEY}`;
+async function getSupportPointsFromGoogle(
+  latitude,
+  longitude,
+  queries,
+  nextPageToken
+) {
+  let results = [];
 
-  if (nextPageToken) {
-    googleUrl += `&pagetoken=${nextPageToken}`;
-  }
+  for (const query of queries) {
+    let googleUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(
+      query
+    )}&location=${latitude},${longitude}&radius=5000&key=${GOOGLE_PLACES_API_KEY}`;
 
-  try {
-    const response = await axios.get(googleUrl);
+    if (nextPageToken) {
+      googleUrl += `&pagetoken=${nextPageToken}`;
+    }
 
-    // Mapear resultados relevantes
-    const results = response.data.results.map((item) => {
-      // Processar fotos para criar URLs de visualização
-      const photos = item.photos?.map((photo) => {
+    try {
+      const response = await axios.get(googleUrl);
+
+      // Mapear resultados relevantes
+      const queryResults = response.data.results.map((item) => {
+        // Processar fotos para criar URLs de visualização
+        const photos =
+          item.photos?.map((photo) => {
+            return {
+              url: `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${photo.photo_reference}&key=${GOOGLE_PLACES_API_KEY}`,
+              attributions: photo.html_attributions,
+            };
+          }) || [];
+
+        // Formatar horários de funcionamento para exibição amigável
+        const openingHours =
+          item.opening_hours?.weekday_text || "Horários não disponíveis";
+        const openNow = item.opening_hours?.open_now
+          ? "Aberto agora"
+          : "Fechado no momento";
+
         return {
-          url: `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${photo.photo_reference}&key=${GOOGLE_PLACES_API_KEY}`,
-          attributions: photo.html_attributions,
+          id: item.place_id,
+          title: item.name || "Ponto de Apoio",
+          position: {
+            lat: item.geometry.location.lat,
+            lng: item.geometry.location.lng,
+          },
+          address: item.formatted_address || "Endereço não disponível",
+          type: item.types.includes("health") ? "public" : "private",
+          rating: item.rating || "Sem avaliação",
+          opening_hours: {
+            text: openingHours,
+            status: openNow,
+          },
+          photos: photos,
         };
-      }) || [];
+      });
 
-      // Formatar horários de funcionamento para exibição amigável
-      const openingHours = item.opening_hours?.weekday_text || "Horários não disponíveis";
-      const openNow = item.opening_hours?.open_now ? "Aberto agora" : "Fechado no momento";
-
-      return {
-        id: item.place_id,
-        title: item.name || "Ponto de Apoio",
-        position: {
-          lat: item.geometry.location.lat,
-          lng: item.geometry.location.lng,
-        },
-        address: item.formatted_address || "Endereço não disponível",
-        type: item.types.includes("health") ? "public" : "private",
-        rating: item.rating || "Sem avaliação",
-        opening_hours: {
-          text: openingHours,
-          status: openNow,
-        },
-        photos: photos,
-      };
-    });
-
-    // Retornar resultados e token para a próxima página, se disponível
-    return {
-      results,
-      nextPageToken: response.data.next_page_token || null,
-    };
-  } catch (error) {
-    console.error("Erro na API Google Places:", error.message);
-    throw new Error("Erro ao buscar pontos de apoio externos.");
+      // Concatenar os resultados
+      results = [...results, ...queryResults];
+    } catch (error) {
+      console.error("Erro na API Google Places:", error.message);
+      throw new Error("Erro ao buscar pontos de apoio externos.");
+    }
   }
+
+  return {
+    results,
+    nextPageToken: nextPageToken || null,
+  };
 }
 
 // Rota atualizada

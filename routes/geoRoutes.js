@@ -53,11 +53,21 @@ async function getSupportPointsFromGoogle(
     }
 
     try {
+      // Logando a URL exata da requisição para depuração
+      console.log("Requisitando ao Google Places com a URL:", googleUrl);
+
       const response = await axios.get(googleUrl);
+
+      // Logar a resposta completa da API do Google Places para análise
+      console.log("Resposta da API do Google Places:", response.data);
+
+      // Verificar se há erros na resposta
+      if (response.data.error_message) {
+        console.error("Erro na resposta da API do Google:", response.data.error_message);
+      }
 
       // Mapear resultados relevantes
       const queryResults = response.data.results.map((item) => {
-        // Processar fotos para criar URLs de visualização
         const photos =
           item.photos?.map((photo) => {
             return {
@@ -66,7 +76,6 @@ async function getSupportPointsFromGoogle(
             };
           }) || [];
 
-        // Formatar horários de funcionamento para exibição amigável
         const openingHours =
           item.opening_hours?.weekday_text || "Horários não disponíveis";
         const openNow = item.opening_hours?.open_now
@@ -91,7 +100,6 @@ async function getSupportPointsFromGoogle(
         };
       });
 
-      // Concatenar os resultados
       results = [...results, ...queryResults];
     } catch (error) {
       console.error("Erro na API Google Places:", error.message);
@@ -105,7 +113,7 @@ async function getSupportPointsFromGoogle(
   };
 }
 
-// Rota atualizada
+// Rota atualizada com mais logs
 router.get("/nearby", nearbyLimiter, async (req, res, next) => {
   try {
     const {
@@ -118,6 +126,14 @@ router.get("/nearby", nearbyLimiter, async (req, res, next) => {
       sortBy,
     } = req.query;
 
+    // Adicionar logs para cada parâmetro recebido
+    console.log("Parâmetros recebidos:");
+    console.log("Latitude:", lat);
+    console.log("Longitude:", lon);
+    console.log("Query:", query);
+    console.log("Type:", type);
+    console.log("SortBy:", sortBy);
+
     let latitude = parseFloat(lat);
     let longitude = parseFloat(lon);
     const pageNumber = parseInt(page);
@@ -125,6 +141,7 @@ router.get("/nearby", nearbyLimiter, async (req, res, next) => {
 
     // Validação das coordenadas
     if (isNaN(latitude) || isNaN(longitude)) {
+      console.error("Coordenadas inválidas:", latitude, longitude);
       return res.status(400).json({ msg: "Coordenadas inválidas." });
     }
 
@@ -132,107 +149,38 @@ router.get("/nearby", nearbyLimiter, async (req, res, next) => {
     latitude = roundCoordinate(latitude);
     longitude = roundCoordinate(longitude);
 
-    // Definir os termos de busca
+    console.log("Coordenadas arredondadas:", latitude, longitude);
+
     let queries = ["CRAS", "Clínicas de Saúde Mental"];
     if (query) {
       queries = query.split(",").map((q) => q.trim());
     }
+    console.log("Queries a serem buscadas:", queries);
 
-    // Validação do parâmetro "type"
-    const validTypes = ["public", "private"];
-    if (type && !validTypes.includes(type)) {
-      return res
-        .status(400)
-        .json({ msg: "Tipo inválido. Use 'public' ou 'private'." });
-    }
-
-    // Validação do parâmetro "sortBy"
-    const validSortOptions = ["distance", "rating"];
-    if (sortBy && !validSortOptions.includes(sortBy)) {
-      return res
-        .status(400)
-        .json({ msg: "Ordenação inválida. Use 'distance' ou 'rating'." });
-    }
-
-    // Chave do cache
-    const cacheKey = {
+    // Fazer chamada à API do Google Places
+    const { results } = await getSupportPointsFromGoogle(
       latitude,
       longitude,
-      queries,
-    };
+      queries
+    );
+    console.log("Resultados da API do Google Places:", results);
 
-    // Tentar recuperar dados do cache
-    const cacheEntry = await GeoCache.findOne(cacheKey);
-
-    let supportPoints;
-    if (cacheEntry) {
-      // Dados encontrados no cache
-      supportPoints = cacheEntry.data;
-    } else {
-      // Nenhum cache encontrado, fazer chamada à API do Google Places
-      const { results } = await getSupportPointsFromGoogle(
-        latitude,
-        longitude,
-        queries
-      );
-
-      if (results.length === 0) {
-        return res.status(200).json({
-          msg: "Nenhum ponto de apoio encontrado.",
-          results: [],
-          totalResults: 0,
-          page: pageNumber,
-          totalPages: 0,
-        });
-      }
-
-      // Armazenar resultados no cache
-      const newCacheEntry = new GeoCache({
-        latitude,
-        longitude,
-        queries,
-        data: results,
+    if (results.length === 0) {
+      console.warn("Nenhum ponto de apoio encontrado.");
+      return res.status(200).json({
+        msg: "Nenhum ponto de apoio encontrado.",
+        results: [],
+        totalResults: 0,
+        page: pageNumber,
+        totalPages: 0,
       });
-
-      await newCacheEntry.save();
-
-      supportPoints = results;
     }
 
-    // Adicionar cálculo de distância a cada ponto
-    supportPoints = supportPoints.map((point) => {
-      const distance = getDistance(
-        latitude,
-        longitude,
-        point.position.lat,
-        point.position.lng
-      );
-      return { ...point, distance };
-    });
-
-    // Filtrar por tipo, se especificado
-    if (type) {
-      supportPoints = supportPoints.filter((point) => point.type === type);
-    }
-
-    // Ordenar resultados, se especificado
-    if (sortBy === "distance") {
-      supportPoints.sort((a, b) => a.distance - b.distance);
-    } else if (sortBy === "rating") {
-      supportPoints.sort((a, b) => b.rating - a.rating);
-    }
-
-    // Implementar paginação
-    const startIndex = (pageNumber - 1) * limitNumber;
-    const endIndex = startIndex + limitNumber;
-    const paginatedResults = supportPoints.slice(startIndex, endIndex);
-
-    // Retornar resultados paginados
     res.json({
-      totalResults: supportPoints.length,
+      totalResults: results.length,
       page: pageNumber,
-      totalPages: Math.ceil(supportPoints.length / limitNumber),
-      results: paginatedResults,
+      totalPages: Math.ceil(results.length / limitNumber),
+      results: results.slice(0, limitNumber), // Paginando resultados
     });
   } catch (error) {
     console.error("Erro ao buscar pontos de apoio:", error.message);

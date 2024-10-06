@@ -51,4 +51,33 @@ router.get("/entries", authMiddleware, async (req, res) => {
   }
 });
 
+// Editar uma entrada de humor existente
+router.put("/entry/:id", authMiddleware, async (req, res) => {
+  const { moodEmoji, entry } = req.body;
+
+  try {
+    const updatedEntry = await DiaryEntry.findOneAndUpdate(
+      { _id: req.params.id, userId: req.user.id },
+      { moodEmoji, entry },
+      { new: true }
+    );
+    res.json(updatedEntry);
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).json({ msg: "Erro ao atualizar a entrada de humor." });
+  }
+});
+
+// Deletar uma entrada de humor
+router.delete("/entry/:id", authMiddleware, async (req, res) => {
+  try {
+    await DiaryEntry.findOneAndDelete({ _id: req.params.id, userId: req.user.id });
+    res.json({ msg: "Entrada de humor deletada com sucesso." });
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).json({ msg: "Erro ao deletar a entrada de humor." });
+  }
+});
+
+
 module.exports = router;

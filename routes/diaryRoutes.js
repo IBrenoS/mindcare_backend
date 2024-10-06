@@ -23,7 +23,7 @@ router.post("/createEntry", authMiddleware, async (req, res) => {
   }
 });
 
-// Listar entradas de humor do usuário com filtros opcionais (diário, semanal, mensal)
+// Listar entradas de humor do usuário com paginação e filtros opcionais
 router.get("/entries", authMiddleware, async (req, res) => {
   const { filter, page = 1, limit = 10 } = req.query;
 
@@ -43,9 +43,9 @@ router.get("/entries", authMiddleware, async (req, res) => {
       userId: req.user.id,
       ...dateFilter,
     })
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit) // Paginação: pular os registros anteriores
-      .limit(Number(limit)); // Limitar o número de entradas
+    .sort({ createdAt: -1 })
+    .skip((page - 1) * limit) // Paginação: pular os registros anteriores
+    .limit(Number(limit)); // Limitar o número de entradas
 
     res.json(entries);
   } catch (error) {
@@ -81,6 +81,5 @@ router.delete("/entry/:id", authMiddleware, async (req, res) => {
     res.status(500).json({ msg: "Erro ao deletar a entrada de humor." });
   }
 });
-
 
 module.exports = router;

@@ -25,7 +25,7 @@ router.post("/createEntry", authMiddleware, async (req, res) => {
 
 // Listar entradas de humor do usuário com filtros opcionais (diário, semanal, mensal)
 router.get("/entries", authMiddleware, async (req, res) => {
-  const { filter } = req.query; // Exemplo de valores para 'filter': 'daily', 'weekly', 'monthly'
+  const { filter, page = 1, limit = 10 } = req.query;
 
   try {
     let dateFilter = {};
@@ -40,9 +40,12 @@ router.get("/entries", authMiddleware, async (req, res) => {
     }
 
     const entries = await DiaryEntry.find({
-      userId: req.user.id, // Apenas entradas do usuário autenticado
+      userId: req.user.id,
       ...dateFilter,
-    }).sort({ createdAt: -1 });
+    })
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit) // Paginação: pular os registros anteriores
+      .limit(Number(limit)); // Limitar o número de entradas
 
     res.json(entries);
   } catch (error) {

@@ -1,31 +1,71 @@
 const express = require("express");
+const { check, validationResult } = require("express-validator");
 const authMiddleware = require("../middlewares/auth"); // Middleware de autenticação JWT
 const DiaryEntry = require("../models/diaryEntry");
 const router = express.Router();
 const dayjs = require("dayjs");
 
 // Criar uma nova entrada no diário de humor
-router.post("/createEntry", authMiddleware, async (req, res) => {
-  const { moodEmoji, entry } = req.body;
+router.post(
+  "/entries",
+  authMiddleware,
+  [
+    // Validação dos dados de entrada
+    check("moodEmoji")
+      .notEmpty()
+      .withMessage("O emoji do humor é obrigatório.")
+      .isLength({ max: 5 })
+      .withMessage("O emoji deve ter no máximo 5 caracteres."),
+    check("entry")
+      .notEmpty()
+      .withMessage("A entrada de texto é obrigatória.")
+      .isLength({ max: 1000 })
+      .withMessage("A entrada de texto deve ter no máximo 1000 caracteres."),
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      // Retorna erros de validação
+      return res.status(400).json({ errors: errors.array() });
+    }
 
-  try {
-    const newEntry = new DiaryEntry({
-      userId: req.user.id, // ID do usuário autenticado recuperado do token JWT
-      moodEmoji,
-      entry,
-    });
+    const { moodEmoji, entry } = req.body;
 
-    await newEntry.save();
-    res.status(201).json(newEntry);
-  } catch (error) {
-    console.error(error.message);
-    res.status(500).json({ msg: "Erro ao criar a entrada de humor." });
+    try {
+      const newEntry = new DiaryEntry({
+        userId: req.user.id, // ID do usuário autenticado recuperado do token JWT
+        moodEmoji,
+        entry,
+      });
+
+      await newEntry.save();
+
+      // Retorna apenas os campos necessários
+      res.status(201).json({
+        id: newEntry._id,
+        moodEmoji: newEntry.moodEmoji,
+        entry: newEntry.entry,
+        createdAt: newEntry.createdAt,
+        updatedAt: newEntry.updatedAt,
+      });
+    } catch (error) {
+      console.error(error.message);
+      res.status(500).json({ msg: "Erro ao criar a entrada de humor." });
+    }
   }
-});
+);
 
 // Listar entradas de humor do usuário com paginação e filtros opcionais
 router.get("/entries", authMiddleware, async (req, res) => {
-  const { filter, page = 1, limit = 10 } = req.query;
+  const validFilters = ["daily", "weekly", "monthly"];
+  const filter = req.query.filter;
+  const page = parseInt(req.query.page) || 1;
+  const maxLimit = 100;
+  const limit = Math.min(parseInt(req.query.limit) || 10, maxLimit);
+
+  if (filter && !validFilters.includes(filter)) {
+    return res.status(400).json({ msg: "Filtro inválido." });
+  }
 
   try {
     let dateFilter = {};
@@ -39,42 +79,113 @@ router.get("/entries", authMiddleware, async (req, res) => {
       dateFilter = { createdAt: { $gte: now.startOf("month").toDate() } };
     }
 
-    const entries = await DiaryEntry.find({
+    const query = {
       userId: req.user.id,
       ...dateFilter,
-    })
-    .sort({ createdAt: -1 })
-    .skip((page - 1) * limit) // Paginação: pular os registros anteriores
-    .limit(Number(limit)); // Limitar o número de entradas
+    };
 
-    res.json(entries);
+    const totalEntries = await DiaryEntry.countDocuments(query);
+
+    const entries = await DiaryEntry.find(query)
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit) // Paginação: pular os registros anteriores
+      .limit(limit) // Limitar o número de entradas
+      .select("id moodEmoji entry createdAt updatedAt"); // Selecionar apenas os campos necessários
+
+    res.json({
+      totalEntries,
+      totalPages: Math.ceil(totalEntries / limit),
+      currentPage: page,
+      entries,
+    });
   } catch (error) {
     console.error(error.message);
     res.status(500).json({ msg: "Erro ao recuperar as entradas de humor." });
   }
 });
 
-// Editar uma entrada de humor existente
-router.put("/entry/:id", authMiddleware, async (req, res) => {
-  const { moodEmoji, entry } = req.body;
-
+// Obter uma entrada de humor específica
+router.get("/entries/:id", authMiddleware, async (req, res) => {
   try {
-    const updatedEntry = await DiaryEntry.findOneAndUpdate(
-      { _id: req.params.id, userId: req.user.id },
-      { moodEmoji, entry },
-      { new: true }
-    );
-    res.json(updatedEntry);
+    const entry = await DiaryEntry.findOne({
+      _id: req.params.id,
+      userId: req.user.id,
+    }).select("id moodEmoji entry createdAt updatedAt");
+
+    if (!entry) {
+      return res.status(404).json({ msg: "Entrada não encontrada." });
+    }
+
+    res.json(entry);
   } catch (error) {
     console.error(error.message);
-    res.status(500).json({ msg: "Erro ao atualizar a entrada de humor." });
+    res.status(500).json({ msg: "Erro ao recuperar a entrada de humor." });
   }
 });
 
+// Editar uma entrada de humor existente
+router.put(
+  "/entries/:id",
+  authMiddleware,
+  [
+    // Validação dos dados de entrada
+    check("moodEmoji")
+      .optional()
+      .notEmpty()
+      .withMessage("O emoji do humor não pode estar vazio.")
+      .isLength({ max: 5 })
+      .withMessage("O emoji deve ter no máximo 5 caracteres."),
+    check("entry")
+      .optional()
+      .notEmpty()
+      .withMessage("A entrada de texto não pode estar vazia.")
+      .isLength({ max: 1000 })
+      .withMessage("A entrada de texto deve ter no máximo 1000 caracteres."),
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      // Retorna erros de validação
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { moodEmoji, entry } = req.body;
+
+    try {
+      const updatedFields = {};
+      if (moodEmoji) updatedFields.moodEmoji = moodEmoji;
+      if (entry) updatedFields.entry = entry;
+
+      const updatedEntry = await DiaryEntry.findOneAndUpdate(
+        { _id: req.params.id, userId: req.user.id },
+        { $set: updatedFields },
+        { new: true }
+      ).select("id moodEmoji entry createdAt updatedAt");
+
+      if (!updatedEntry) {
+        return res.status(404).json({ msg: "Entrada não encontrada." });
+      }
+
+      res.json(updatedEntry);
+    } catch (error) {
+      console.error(error.message);
+      res.status(500).json({ msg: "Erro ao atualizar a entrada de humor." });
+    }
+  }
+);
+
 // Deletar uma entrada de humor
-router.delete("/entry/:id", authMiddleware, async (req, res) => {
+router.delete("/entries/:id", authMiddleware, async (req, res) => {
   try {
-    await DiaryEntry.findOneAndDelete({ _id: req.params.id, userId: req.user.id });
+    const deletedEntry = await DiaryEntry.findOneAndDelete({
+      _id: req.params.id,
+      userId: req.user.id,
+    });
+
+    if (!deletedEntry) {
+      return res.status(404).json({ msg: "Entrada não encontrada." });
+    }
+
     res.json({ msg: "Entrada de humor deletada com sucesso." });
   } catch (error) {
     console.error(error.message);

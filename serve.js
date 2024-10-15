@@ -6,7 +6,7 @@ const path = require("path");
 
 const app = express();
 
-// **Adicione esta linha abaixo**
+// Configuração do Express para aceitar requisições de um proxy reverso
 app.set('trust proxy', 1);
 
 app.use(cors());

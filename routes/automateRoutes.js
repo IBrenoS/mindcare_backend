@@ -12,25 +12,45 @@ router.post(
   authorize(["moderator", "admin"]),
   async (req, res) => {
     try {
-      await fetchYouTubeVideos();
-      res.json({ msg: "Busca de vídeos automatizada realizada com sucesso!" });
+      const limit = req.body.limit || 5; // Limite configurável
+      await fetchYouTubeVideos(limit);
+      res.json({
+        success: true,
+        message: "Busca de vídeos automatizada realizada com sucesso!",
+      });
     } catch (err) {
-      res.status(500).json({ msg: "Erro ao buscar vídeos." });
+      res
+        .status(500)
+        .json({
+          success: false,
+          message: "Erro ao buscar vídeos.",
+          error: err.message,
+        });
     }
   }
 );
 
-// Rota para automatizar a busca de artigos API
+// Rota para automatizar a busca de artigos da NewsAPI
 router.post(
   "/articles",
   authMiddleware,
   authorize(["moderator", "admin"]),
   async (req, res) => {
     try {
-      await fetchNewsAPIArticles();
-      res.json({ msg: "Busca de artigos automatizada realizada com sucesso!" });
+      const limit = req.body.limit || 10; // Limite configurável
+      await fetchNewsAPIArticles(limit);
+      res.json({
+        success: true,
+        message: "Busca de artigos automatizada realizada com sucesso!",
+      });
     } catch (err) {
-      res.status(500).json({ msg: "Erro ao buscar artigos." });
+      res
+        .status(500)
+        .json({
+          success: false,
+          message: "Erro ao buscar artigos.",
+          error: err.message,
+        });
     }
   }
 );

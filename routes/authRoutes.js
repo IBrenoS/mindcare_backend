@@ -101,7 +101,7 @@ router.post("/register", upload.single("image"), // Adicionando o upload no regi
       const token = jwt.sign(
         { userId: user._id, role: user.role },
         process.env.JWT_SECRET,
-        { expiresIn: "1h" }
+        { expiresIn: "12h" }
       );
 
       res.json({ msg: "Usuário registrado com sucesso.", token });

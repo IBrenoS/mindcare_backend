@@ -134,7 +134,7 @@ router.post("/login", [body("email").isEmail(), body("password").exists()],
         { userId: user._id, role: user.role },
         process.env.JWT_SECRET,
         {
-          expiresIn: "1h",
+          expiresIn: "12h",
         }
       );
       res.json({ msg: "Login bem-sucedido", token });
@@ -501,7 +501,7 @@ router.post("/upload", authMiddleware, upload.single("image"), async (req, res) 
 });
 
 router.get("/validate-token", authMiddleware, (req, res) => {
-  
+
   res.status(200).json({ message: "Token válido", user: req.user });
 });
 

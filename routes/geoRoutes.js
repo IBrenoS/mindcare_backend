@@ -56,47 +56,47 @@ async function getSupportPointsFromGoogle(
     try {
       const response = await axios.get(googleUrl);
 
-      // Mapear resultados relevantes
-      const queryResults = response.data.results.map((item) => {
-        const photos =
-          item.photos?.map((photo) => ({
-            url: `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${photo.photo_reference}&key=${GOOGLE_PLACES_API_KEY}`,
-            attributions: photo.html_attributions,
-          })) || [];
+      // Verifica se há resultados
+      if (response.data.results && response.data.results.length > 0) {
+        const queryResults = response.data.results.map((item) => {
+          const photos =
+            item.photos?.map((photo) => ({
+              url: `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${photo.photo_reference}&key=${GOOGLE_PLACES_API_KEY}`,
+              attributions: photo.html_attributions,
+            })) || [];
 
-        const openingHours =
-          item.opening_hours?.weekday_text || "Horários não disponíveis";
-        const openNow = item.opening_hours?.open_now
-          ? "Aberto agora"
-          : "Fechado no momento";
+          const openingHours =
+            item.opening_hours?.weekday_text || "Horários não disponíveis";
+          const openNow = item.opening_hours?.open_now
+            ? "Aberto agora"
+            : "Fechado no momento";
 
-        return {
-          id: item.place_id,
-          title: item.name || "Ponto de Apoio",
-          position: {
-            lat: item.geometry.location.lat,
-            lng: item.geometry.location.lng,
-          },
-          address: item.formatted_address || "Endereço não disponível",
-          type: item.types.includes("health") ? "public" : "private",
-          rating: item.rating || "Sem avaliação",
-          opening_hours: {
-            text: openingHours,
-            status: openNow,
-          },
-          photos: photos,
-        };
-      });
+          return {
+            id: item.place_id,
+            title: item.name || "Ponto de Apoio",
+            position: {
+              lat: item.geometry.location.lat,
+              lng: item.geometry.location.lng,
+            },
+            address: item.formatted_address || "Endereço não disponível",
+            type: item.types.includes("health") ? "public" : "private",
+            rating: item.rating || "Sem avaliação",
+            opening_hours: {
+              text: openingHours,
+              status: openNow,
+            },
+            photos: photos,
+          };
+        });
 
-      // Concatenar os resultados
-      results = [...results, ...queryResults];
-
-      // Verificar se há mais páginas de resultados e pegar o pagetoken
-      if (response.data.next_page_token) {
-        nextPageToken = response.data.next_page_token;
+        results = [...results, ...queryResults];
+      } else {
+        console.log(
+          "Nenhum resultado encontrado na resposta da API do Google."
+        );
       }
     } catch (error) {
-      console.error("Erro na API Google Places:", error.message);
+      console.error(`Erro na requisição para Google Places: ${error.message}`);
       throw new Error("Erro ao buscar pontos de apoio externos.");
     }
   }

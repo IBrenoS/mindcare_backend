@@ -45,70 +45,74 @@ async function getSupportPointsFromGoogle(
   let results = [];
 
   for (const query of queries) {
-    let token = nextPageToken || null;
-    let hasMorePages = true;
+    let googleUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(
+      query
+    )}&location=${latitude},${longitude}&radius=10000&fields=place_id,name,geometry,formatted_address,photos,opening_hours,rating&key=${GOOGLE_PLACES_API_KEY}`;
 
-    while (hasMorePages) {
-      let googleUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(
-        query
-      )}&location=${latitude},${longitude}&radius=5000&key=${GOOGLE_PLACES_API_KEY}`;
+    if (nextPageToken) {
+      googleUrl += `&pagetoken=${nextPageToken}`;
+    }
 
-      if (token) {
-        googleUrl += `&pagetoken=${token}`;
-      }
+    console.log(`Fazendo requisição para: ${googleUrl}`);
 
-      console.log(`Solicitando à API do Google Places: ${googleUrl}`);
+    try {
+      const response = await axios.get(googleUrl);
 
-      try {
-        const response = await axios.get(googleUrl);
+      // Loga a resposta completa formatada como JSON
+      console.log(
+        `Resposta da API do Google: ${JSON.stringify(response.data, null, 2)}`
+      );
 
-        console.log(`Resposta recebida para query "${query}":`, response.data);
+      // Verifica se há resultados
+      if (response.data.results && response.data.results.length > 0) {
+        const queryResults = response.data.results.map((item) => {
+          const photos =
+            item.photos?.map((photo) => ({
+              url: `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${photo.photo_reference}&key=${GOOGLE_PLACES_API_KEY}`,
+              attributions: photo.html_attributions,
+            })) || [];
 
-        if (response.data.status === "OK" && response.data.results.length > 0) {
-          const queryResults = response.data.results.map((item) => {
-            // Processamento dos itens
-            // ...
+          const openingHours =
+            item.opening_hours?.weekday_text || "Horários não disponíveis";
+          const openNow = item.opening_hours?.open_now
+            ? "Aberto agora"
+            : "Fechado no momento";
 
-            return {
-              // Dados processados
-            };
-          });
+          return {
+            id: item.place_id,
+            title: item.name || "Ponto de Apoio",
+            position: {
+              lat: item.geometry.location.lat,
+              lng: item.geometry.location.lng,
+            },
+            address: item.formatted_address || "Endereço não disponível",
+            type: item.types.includes("health") ? "public" : "private",
+            rating: item.rating || "Sem avaliação",
+            opening_hours: {
+              text: openingHours,
+              status: openNow,
+            },
+            photos: photos,
+          };
+        });
 
-          results = [...results, ...queryResults];
-
-          if (response.data.next_page_token) {
-            await new Promise((resolve) => setTimeout(resolve, 2000));
-            token = response.data.next_page_token;
-          } else {
-            hasMorePages = false;
-            token = null;
-          }
-        } else if (response.data.status === "ZERO_RESULTS") {
-          console.log(`Nenhum resultado encontrado para a query "${query}".`);
-          hasMorePages = false;
-          token = null;
-        } else {
-          console.error(
-            `Erro na resposta da API do Google Places: ${response.data.status}`
-          );
-          hasMorePages = false;
-          token = null;
-        }
-      } catch (error) {
-        console.error(
-          `Erro na requisição para Google Places com query "${query}": ${error.message}`
+        results = [...results, ...queryResults];
+      } else {
+        console.log(
+          "Nenhum resultado encontrado na resposta da API do Google."
         );
-        throw new Error("Erro ao buscar pontos de apoio externos.");
       }
+    } catch (error) {
+      console.error(`Erro na requisição para Google Places: ${error.message}`);
+      throw new Error("Erro ao buscar pontos de apoio externos.");
     }
   }
 
   return {
     results,
-    nextPageToken: null,
+    nextPageToken: nextPageToken || null,
   };
 }
-
 
 // Rota atualizada com suporte a paginação e busca dinâmica
 router.get("/nearby", nearbyLimiter, async (req, res, next) => {

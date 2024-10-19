@@ -46,7 +46,7 @@ async function getSupportPointsFromGoogle(
   for (const query of queries) {
     let googleUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(
       query
-    )}&location=${latitude},${longitude}&radius=5000&key=${GOOGLE_PLACES_API_KEY}`;
+    )}&location=${latitude},${longitude}&radius=5000&fields=place_id,name,geometry,formatted_address,photos,opening_hours,rating&key=${GOOGLE_PLACES_API_KEY}`;
 
     if (nextPageToken) {
       googleUrl += `&pagetoken=${nextPageToken}`;
@@ -57,16 +57,12 @@ async function getSupportPointsFromGoogle(
 
       // Mapear resultados relevantes
       const queryResults = response.data.results.map((item) => {
-        // Processar fotos para criar URLs de visualização
         const photos =
-          item.photos?.map((photo) => {
-            return {
-              url: `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${photo.photo_reference}&key=${GOOGLE_PLACES_API_KEY}`,
-              attributions: photo.html_attributions,
-            };
-          }) || [];
+          item.photos?.map((photo) => ({
+            url: `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${photo.photo_reference}&key=${GOOGLE_PLACES_API_KEY}`,
+            attributions: photo.html_attributions,
+          })) || [];
 
-        // Formatar horários de funcionamento para exibição amigável
         const openingHours =
           item.opening_hours?.weekday_text || "Horários não disponíveis";
         const openNow = item.opening_hours?.open_now

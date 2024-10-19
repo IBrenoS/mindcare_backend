@@ -1,5 +1,6 @@
 const axios = require("axios");
 const Article = require("../models/articles");
+require("dotenv").config();
 
 async function fetchNewsAPIArticles(limit = 10) {
   const apiKey = process.env.NEWS_API_KEY;

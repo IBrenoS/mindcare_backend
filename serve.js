@@ -27,8 +27,6 @@ app.get("/.well-known/assetlinks.json", (req, res) => {
 app.use("/auth", require("./routes/authRoutes"));
 app.use("/community", require("./routes/communityRoutes"));
 app.use("/diary", require("./routes/diaryRoutes"));
-app.use("/gamification", require("./routes/gamificationRoutes"));
-app.use("/challenges", require("./routes/challengeRoutes"));
 app.use("/geo", require("./routes/geoRoutes"));
 app.use("/exercises", require("./routes/exerciseRoutes"));
 app.use("/educational", require("./routes/educationalRoutes"));

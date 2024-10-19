@@ -3,6 +3,7 @@ const axios = require("axios");
 const GeoCache = require("../models/geoCache");
 const router = express.Router();
 const rateLimit = require("express-rate-limit");
+require("dotenv").config();
 
 // Chave da API do Google Places (certifique-se de defini-la nas variáveis de ambiente)
 const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY;

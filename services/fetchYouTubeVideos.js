@@ -1,5 +1,6 @@
 const axios = require("axios");
 const Video = require("../models/video");
+require("dotenv").config();
 
 async function fetchYouTubeVideos(limit = 5) {
   const apiKey = process.env.YOUTUBE_API_KEY;

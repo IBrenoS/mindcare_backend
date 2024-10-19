@@ -90,6 +90,11 @@ async function getSupportPointsFromGoogle(
 
       // Concatenar os resultados
       results = [...results, ...queryResults];
+
+      // Verificar se há mais páginas de resultados e pegar o pagetoken
+      if (response.data.next_page_token) {
+        nextPageToken = response.data.next_page_token;
+      }
     } catch (error) {
       console.error("Erro na API Google Places:", error.message);
       throw new Error("Erro ao buscar pontos de apoio externos.");
@@ -102,7 +107,7 @@ async function getSupportPointsFromGoogle(
   };
 }
 
-// Rota atualizada
+// Rota atualizada com suporte a paginação e busca dinâmica
 router.get("/nearby", nearbyLimiter, async (req, res, next) => {
   try {
     const {
@@ -113,6 +118,7 @@ router.get("/nearby", nearbyLimiter, async (req, res, next) => {
       limit = 20,
       type,
       sortBy,
+      nextPageToken,
     } = req.query;
 
     let latitude = parseFloat(lat);
@@ -129,8 +135,8 @@ router.get("/nearby", nearbyLimiter, async (req, res, next) => {
     latitude = roundCoordinate(latitude);
     longitude = roundCoordinate(longitude);
 
-    // Definir os termos de busca
-    let queries = ["CRAS", "Clínicas de Saúde Mental"];
+    // Definir os termos de busca com múltiplos filtros
+    let queries = ["CRAS", "Clínicas Psiquiátricas", "Clínicas de Psicologia"];
     if (query) {
       queries = query.split(",").map((q) => q.trim());
     }
@@ -151,7 +157,7 @@ router.get("/nearby", nearbyLimiter, async (req, res, next) => {
         .json({ msg: "Ordenação inválida. Use 'distance' ou 'rating'." });
     }
 
-    // Chave do cache
+    // Chave do cache (não foi alterada, mas válida para otimização)
     const cacheKey = {
       latitude,
       longitude,
@@ -162,16 +168,20 @@ router.get("/nearby", nearbyLimiter, async (req, res, next) => {
     const cacheEntry = await GeoCache.findOne(cacheKey);
 
     let supportPoints;
+    let nextToken;
     if (cacheEntry) {
       // Dados encontrados no cache
       supportPoints = cacheEntry.data;
     } else {
       // Nenhum cache encontrado, fazer chamada à API do Google Places
-      const { results } = await getSupportPointsFromGoogle(
-        latitude,
-        longitude,
-        queries
-      );
+      const { results, nextPageToken: token } =
+        await getSupportPointsFromGoogle(
+          latitude,
+          longitude,
+          queries,
+          nextPageToken
+        );
+      nextToken = token;
 
       if (results.length === 0) {
         return res.status(200).json({
@@ -224,12 +234,13 @@ router.get("/nearby", nearbyLimiter, async (req, res, next) => {
     const endIndex = startIndex + limitNumber;
     const paginatedResults = supportPoints.slice(startIndex, endIndex);
 
-    // Retornar resultados paginados
+    // Retornar resultados paginados com o próximo token de página
     res.json({
       totalResults: supportPoints.length,
       page: pageNumber,
       totalPages: Math.ceil(supportPoints.length / limitNumber),
       results: paginatedResults,
+      nextPageToken: nextToken,
     });
   } catch (error) {
     console.error("Erro ao buscar pontos de apoio:", error.message);

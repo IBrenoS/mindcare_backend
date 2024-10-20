@@ -3,7 +3,6 @@ const axios = require("axios");
 const GeoCache = require("../models/geoCache");
 const router = express.Router();
 const rateLimit = require("express-rate-limit");
-require("dotenv").config();
 
 // Chave da API do Google Places (certifique-se de defini-la nas variáveis de ambiente)
 const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY;
@@ -36,74 +35,61 @@ function getDistance(lat1, lon1, lat2, lon2) {
 }
 
 // Função para buscar pontos de apoio pela API do Google Places
-async function getSupportPointsFromGoogle(
-  latitude,
-  longitude,
-  queries,
-  nextPageToken
-) {
+async function getSupportPointsFromGoogle(latitude, longitude, queries, nextPageToken) {
   let results = [];
 
+  // Iterar sobre as queries que foram passadas ("CRAS", "Clínica Psiquiátrica", "Clínica Psicológica")
   for (const query of queries) {
-    let googleUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(
-      query
-    )}&location=${latitude},${longitude}&radius=10000&fields=place_id,name,geometry,formatted_address,photos,opening_hours,rating&key=${GOOGLE_PLACES_API_KEY}`;
+    let googleUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&location=${latitude},${longitude}&radius=5000&key=${GOOGLE_PLACES_API_KEY}`;
 
     if (nextPageToken) {
       googleUrl += `&pagetoken=${nextPageToken}`;
     }
 
-    console.log(`Fazendo requisição para: ${googleUrl}`);
-
     try {
       const response = await axios.get(googleUrl);
 
-      // Loga a resposta completa formatada como JSON
-      console.log(
-        `Resposta da API do Google: ${JSON.stringify(response.data, null, 2)}`
-      );
-
-      // Verifica se há resultados
-      if (response.data.results && response.data.results.length > 0) {
-        const queryResults = response.data.results.map((item) => {
-          const photos =
-            item.photos?.map((photo) => ({
-              url: `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${photo.photo_reference}&key=${GOOGLE_PLACES_API_KEY}`,
-              attributions: photo.html_attributions,
-            })) || [];
-
-          const openingHours =
-            item.opening_hours?.weekday_text || "Horários não disponíveis";
-          const openNow = item.opening_hours?.open_now
-            ? "Aberto agora"
-            : "Fechado no momento";
-
-          return {
-            id: item.place_id,
-            title: item.name || "Ponto de Apoio",
-            position: {
-              lat: item.geometry.location.lat,
-              lng: item.geometry.location.lng,
-            },
-            address: item.formatted_address || "Endereço não disponível",
-            type: item.types.includes("health") ? "public" : "private",
-            rating: item.rating || "Sem avaliação",
-            opening_hours: {
-              text: openingHours,
-              status: openNow,
-            },
-            photos: photos,
-          };
-        });
-
-        results = [...results, ...queryResults];
-      } else {
-        console.log(
-          "Nenhum resultado encontrado na resposta da API do Google."
-        );
+      // Verificar se a resposta contém resultados
+      if (response.data.results.length === 0) {
+        console.log(`Nenhum resultado encontrado para a query: ${query}`);
+        continue;
       }
+
+      // Mapear os resultados relevantes
+      const queryResults = response.data.results.map((item) => {
+        // Processar fotos para criar URLs de visualização
+        const photos = item.photos?.map((photo) => ({
+          url: `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${photo.photo_reference}&key=${GOOGLE_PLACES_API_KEY}`,
+          attributions: photo.html_attributions,
+        })) || [];
+
+        // Formatar horários de funcionamento
+        const openingHours = item.opening_hours?.weekday_text || "Horários não disponíveis";
+        const openNow = item.opening_hours?.open_now ? "Aberto agora" : "Fechado no momento";
+
+        return {
+          id: item.place_id,
+          title: item.name || "Ponto de Apoio",
+          position: {
+            lat: item.geometry.location.lat,
+            lng: item.geometry.location.lng,
+          },
+          address: item.formatted_address || "Endereço não disponível",
+          type: item.types.includes("health") ? "public" : "private",
+          rating: item.rating || "Sem avaliação",
+          opening_hours: {
+            text: openingHours,
+            status: openNow,
+          },
+          photos: photos,
+        };
+      });
+
+      // Concatenar os resultados
+      results = [...results, ...queryResults];
+
     } catch (error) {
-      console.error(`Erro na requisição para Google Places: ${error.message}`);
+      console.error(`Erro na query ${query}:`, error.message);
       throw new Error("Erro ao buscar pontos de apoio externos.");
     }
   }
@@ -114,7 +100,7 @@ async function getSupportPointsFromGoogle(
   };
 }
 
-// Rota atualizada com suporte a paginação e busca dinâmica
+// Rota atualizada
 router.get("/nearby", nearbyLimiter, async (req, res, next) => {
   try {
     const {
@@ -125,7 +111,6 @@ router.get("/nearby", nearbyLimiter, async (req, res, next) => {
       limit = 20,
       type,
       sortBy,
-      nextPageToken,
     } = req.query;
 
     let latitude = parseFloat(lat);
@@ -142,8 +127,8 @@ router.get("/nearby", nearbyLimiter, async (req, res, next) => {
     latitude = roundCoordinate(latitude);
     longitude = roundCoordinate(longitude);
 
-    // Definir os termos de busca com múltiplos filtros
-    let queries = ["CRAS", "Clínicas Psiquiátricas", "Clínicas de Psicologia"];
+    // Definir os termos de busca
+    let queries = ["CRAS", "Clínicas de Saúde Mental"];
     if (query) {
       queries = query.split(",").map((q) => q.trim());
     }
@@ -164,7 +149,7 @@ router.get("/nearby", nearbyLimiter, async (req, res, next) => {
         .json({ msg: "Ordenação inválida. Use 'distance' ou 'rating'." });
     }
 
-    // Chave do cache (não foi alterada, mas válida para otimização)
+    // Chave do cache
     const cacheKey = {
       latitude,
       longitude,
@@ -175,20 +160,16 @@ router.get("/nearby", nearbyLimiter, async (req, res, next) => {
     const cacheEntry = await GeoCache.findOne(cacheKey);
 
     let supportPoints;
-    let nextToken;
     if (cacheEntry) {
       // Dados encontrados no cache
       supportPoints = cacheEntry.data;
     } else {
       // Nenhum cache encontrado, fazer chamada à API do Google Places
-      const { results, nextPageToken: token } =
-        await getSupportPointsFromGoogle(
-          latitude,
-          longitude,
-          queries,
-          nextPageToken
-        );
-      nextToken = token;
+      const { results } = await getSupportPointsFromGoogle(
+        latitude,
+        longitude,
+        queries
+      );
 
       if (results.length === 0) {
         return res.status(200).json({
@@ -241,13 +222,12 @@ router.get("/nearby", nearbyLimiter, async (req, res, next) => {
     const endIndex = startIndex + limitNumber;
     const paginatedResults = supportPoints.slice(startIndex, endIndex);
 
-    // Retornar resultados paginados com o próximo token de página
+    // Retornar resultados paginados
     res.json({
       totalResults: supportPoints.length,
       page: pageNumber,
       totalPages: Math.ceil(supportPoints.length / limitNumber),
       results: paginatedResults,
-      nextPageToken: nextToken,
     });
   } catch (error) {
     console.error("Erro ao buscar pontos de apoio:", error.message);

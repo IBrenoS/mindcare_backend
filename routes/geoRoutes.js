@@ -40,6 +40,7 @@ async function getSupportPointsFromGoogle(latitude, longitude, queries, nextPage
 
   // Iterar sobre as queries que foram passadas ("CRAS", "Clínica Psiquiátrica", "Clínica Psicológica")
   for (const query of queries) {
+    // Codificação da query já está correta usando encodeURIComponent
     let googleUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&location=${latitude},${longitude}&radius=10000&key=${GOOGLE_PLACES_API_KEY}`;
 
     if (nextPageToken) {
@@ -49,8 +50,8 @@ async function getSupportPointsFromGoogle(latitude, longitude, queries, nextPage
     try {
       const response = await axios.get(googleUrl);
 
-      // Verificar se a resposta contém resultados
-      if (response.data.results.length === 0) {
+      // Verificar se a resposta da API é válida e contém resultados
+      if (!response.data || !response.data.results || response.data.results.length === 0) {
         console.log(`Nenhum resultado encontrado para a query: ${query}`);
         continue;
       }
@@ -90,7 +91,16 @@ async function getSupportPointsFromGoogle(latitude, longitude, queries, nextPage
 
     } catch (error) {
       console.error(`Erro na query ${query}:`, error.message);
-      throw new Error("Erro ao buscar pontos de apoio externos.");
+
+      // Verificação de erros de resposta e tratamento adequado
+      if (error.response) {
+        console.error('Erro na resposta da API:', error.response.status, error.response.data);
+      } else if (error.request) {
+        console.error('Erro na requisição (sem resposta da API):', error.request);
+      } else {
+        console.error('Erro desconhecido:', error.message);
+      }
+      throw new Error(`Erro ao buscar pontos de apoio para a query ${query}`);
     }
   }
 

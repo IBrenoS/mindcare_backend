@@ -40,7 +40,7 @@ async function getSupportPointsFromGoogle(latitude, longitude, queries, nextPage
 
   // Iterar sobre as queries que foram passadas ("CRAS", "Clínica Psiquiátrica", "Clínica Psicológica")
   for (const query of queries) {
-    let googleUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&location=${latitude},${longitude}&radius=5000&key=${GOOGLE_PLACES_API_KEY}`;
+    let googleUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&location=${latitude},${longitude}&radius=10000&key=${GOOGLE_PLACES_API_KEY}`;
 
     if (nextPageToken) {
       googleUrl += `&pagetoken=${nextPageToken}`;

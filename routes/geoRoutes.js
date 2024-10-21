@@ -35,13 +35,18 @@ function getDistance(lat1, lon1, lat2, lon2) {
 }
 
 // Função para buscar pontos de apoio pela API do Google Places
-async function getSupportPointsFromGoogle(latitude, longitude, queries, nextPageToken) {
+async function getSupportPointsFromGoogle(
+  latitude,
+  longitude,
+  queries,
+  nextPageToken
+) {
   let results = [];
 
-  // Iterar sobre as queries que foram passadas ("CRAS", "Clínica Psiquiátrica", "Clínica Psicológica")
   for (const query of queries) {
-    // Codificação da query já está correta usando encodeURIComponent
-    let googleUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&location=${latitude},${longitude}&radius=10000&key=${GOOGLE_PLACES_API_KEY}`;
+    let googleUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(
+      query
+    )}&location=${latitude},${longitude}&radius=5000&key=${GOOGLE_PLACES_API_KEY}`;
 
     if (nextPageToken) {
       googleUrl += `&pagetoken=${nextPageToken}`;
@@ -50,23 +55,23 @@ async function getSupportPointsFromGoogle(latitude, longitude, queries, nextPage
     try {
       const response = await axios.get(googleUrl);
 
-      // Verificar se a resposta da API é válida e contém resultados
-      if (!response.data || !response.data.results || response.data.results.length === 0) {
-        console.log(`Nenhum resultado encontrado para a query: ${query}`);
-        continue;
-      }
-
-      // Mapear os resultados relevantes
+      // Mapear resultados relevantes
       const queryResults = response.data.results.map((item) => {
         // Processar fotos para criar URLs de visualização
-        const photos = item.photos?.map((photo) => ({
-          url: `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${photo.photo_reference}&key=${GOOGLE_PLACES_API_KEY}`,
-          attributions: photo.html_attributions,
-        })) || [];
+        const photos =
+          item.photos?.map((photo) => {
+            return {
+              url: `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${photo.photo_reference}&key=${GOOGLE_PLACES_API_KEY}`,
+              attributions: photo.html_attributions,
+            };
+          }) || [];
 
-        // Formatar horários de funcionamento
-        const openingHours = item.opening_hours?.weekday_text || "Horários não disponíveis";
-        const openNow = item.opening_hours?.open_now ? "Aberto agora" : "Fechado no momento";
+        // Formatar horários de funcionamento para exibição amigável
+        const openingHours =
+          item.opening_hours?.weekday_text || "Horários não disponíveis";
+        const openNow = item.opening_hours?.open_now
+          ? "Aberto agora"
+          : "Fechado no momento";
 
         return {
           id: item.place_id,
@@ -88,19 +93,9 @@ async function getSupportPointsFromGoogle(latitude, longitude, queries, nextPage
 
       // Concatenar os resultados
       results = [...results, ...queryResults];
-
     } catch (error) {
-      console.error(`Erro na query ${query}:`, error.message);
-
-      // Verificação de erros de resposta e tratamento adequado
-      if (error.response) {
-        console.error('Erro na resposta da API:', error.response.status, error.response.data);
-      } else if (error.request) {
-        console.error('Erro na requisição (sem resposta da API):', error.request);
-      } else {
-        console.error('Erro desconhecido:', error.message);
-      }
-      throw new Error(`Erro ao buscar pontos de apoio para a query ${query}`);
+      console.error("Erro na API Google Places:", error.message);
+      throw new Error("Erro ao buscar pontos de apoio externos.");
     }
   }
 
@@ -138,7 +133,7 @@ router.get("/nearby", nearbyLimiter, async (req, res, next) => {
     longitude = roundCoordinate(longitude);
 
     // Definir os termos de busca
-    let queries = ["CRAS", "Clinica Psiquiatrica", "Clinica Psicologica"];
+    let queries = ["CRAS", "Clínicas de Saúde Mental"];
     if (query) {
       queries = query.split(",").map((q) => q.trim());
     }

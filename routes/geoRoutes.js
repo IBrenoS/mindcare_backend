@@ -35,14 +35,13 @@ function getDistance(lat1, lon1, lat2, lon2) {
 }
 
 // Função para buscar pontos de apoio pela API do Google Places
-// Função atualizada para buscar pontos de apoio pela API do Google Places
 async function getSupportPointsFromGoogle(
   latitude,
   longitude,
   queries,
   nextPageToken
 ) {
-  let allResults = [];
+  let results = [];
 
   for (const query of queries) {
     let googleUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(
@@ -56,35 +55,53 @@ async function getSupportPointsFromGoogle(
     try {
       const response = await axios.get(googleUrl);
 
-      const results = response.data.results.map((item) => ({
-        id: item.place_id,
-        title: item.name || "Ponto de Apoio",
-        position: {
-          lat: item.geometry.location.lat,
-          lng: item.geometry.location.lng,
-        },
-        address: item.formatted_address,
-        type: item.types.includes("health") ? "public" : "private",
-        rating: item.rating || null,
-        opening_hours: item.opening_hours || null,
-        photos: item.photos || [],
-      }));
+      // Mapear resultados relevantes
+      const queryResults = response.data.results.map((item) => {
+        // Processar fotos para criar URLs de visualização
+        const photos =
+          item.photos?.map((photo) => {
+            return {
+              url: `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${photo.photo_reference}&key=${GOOGLE_PLACES_API_KEY}`,
+              attributions: photo.html_attributions,
+            };
+          }) || [];
 
-      allResults = allResults.concat(results);
+        // Formatar horários de funcionamento para exibição amigável
+        const openingHours =
+          item.opening_hours?.weekday_text || "Horários não disponíveis";
+        const openNow = item.opening_hours?.open_now
+          ? "Aberto agora"
+          : "Fechado no momento";
+
+        return {
+          id: item.place_id,
+          title: item.name || "Ponto de Apoio",
+          position: {
+            lat: item.geometry.location.lat,
+            lng: item.geometry.location.lng,
+          },
+          address: item.formatted_address || "Endereço não disponível",
+          type: item.types.includes("health") ? "public" : "private",
+          rating: item.rating || "Sem avaliação",
+          opening_hours: {
+            text: openingHours,
+            status: openNow,
+          },
+          photos: photos,
+        };
+      });
+
+      // Concatenar os resultados
+      results = [...results, ...queryResults];
     } catch (error) {
       console.error("Erro na API Google Places:", error.message);
       throw new Error("Erro ao buscar pontos de apoio externos.");
     }
   }
 
-  // Remover duplicatas
-  const uniqueResults = Array.from(
-    new Map(allResults.map((item) => [item.id, item])).values()
-  );
-
   return {
-    results: uniqueResults,
-    nextPageToken: null,
+    results,
+    nextPageToken: nextPageToken || null,
   };
 }
 
@@ -150,7 +167,9 @@ router.get("/nearby", nearbyLimiter, async (req, res, next) => {
 
       // Armazenar resultados no cache
       const newCacheEntry = new GeoCache({
-        ...cacheKey,
+        latitude,
+        longitude,
+        queries,
         data: results,
       });
 
@@ -199,3 +218,5 @@ router.get("/nearby", nearbyLimiter, async (req, res, next) => {
     next(error);
   }
 });
+
+module.exports = router;

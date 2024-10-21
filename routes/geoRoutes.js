@@ -35,60 +35,70 @@ function getDistance(lat1, lon1, lat2, lon2) {
 }
 
 // Função para buscar pontos de apoio pela API do Google Places
+// Função atualizada para buscar pontos de apoio pela API do Google Places
 async function getSupportPointsFromGoogle(
   latitude,
   longitude,
-  query,
+  queries,
   nextPageToken
 ) {
-  let googleUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(
-    query
-  )}&location=${latitude},${longitude}&radius=5000&key=${GOOGLE_PLACES_API_KEY}`;
+  let allResults = [];
 
-  if (nextPageToken) {
-    googleUrl += `&pagetoken=${nextPageToken}`;
+  for (const query of queries) {
+    let googleUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(
+      query
+    )}&location=${latitude},${longitude}&radius=5000&key=${GOOGLE_PLACES_API_KEY}`;
+
+    if (nextPageToken) {
+      googleUrl += `&pagetoken=${nextPageToken}`;
+    }
+
+    try {
+      const response = await axios.get(googleUrl);
+
+      const results = response.data.results.map((item) => ({
+        id: item.place_id,
+        title: item.name || "Ponto de Apoio",
+        position: {
+          lat: item.geometry.location.lat,
+          lng: item.geometry.location.lng,
+        },
+        address: item.formatted_address,
+        type: item.types.includes("health") ? "public" : "private",
+        rating: item.rating || null,
+        opening_hours: item.opening_hours || null,
+        photos: item.photos || [],
+      }));
+
+      allResults = allResults.concat(results);
+    } catch (error) {
+      console.error("Erro na API Google Places:", error.message);
+      throw new Error("Erro ao buscar pontos de apoio externos.");
+    }
   }
 
-  try {
-    const response = await axios.get(googleUrl);
+  // Remover duplicatas
+  const uniqueResults = Array.from(
+    new Map(allResults.map((item) => [item.id, item])).values()
+  );
 
-    // Mapear resultados relevantes
-    const results = response.data.results.map((item) => ({
-      id: item.place_id,
-      title: item.name || "Ponto de Apoio",
-      position: {
-        lat: item.geometry.location.lat,
-        lng: item.geometry.location.lng,
-      },
-      address: item.formatted_address,
-      type: item.types.includes("health") ? "public" : "private",
-      rating: item.rating || null,
-      opening_hours: item.opening_hours || null,
-      photos: item.photos || [],
-    }));
-
-    // Retornar resultados e token para a próxima página, se disponível
-    return {
-      results,
-      nextPageToken: response.data.next_page_token || null,
-    };
-  } catch (error) {
-    console.error("Erro na API Google Places:", error.message);
-    throw new Error("Erro ao buscar pontos de apoio externos.");
-  }
+  return {
+    results: uniqueResults,
+    nextPageToken: null,
+  };
 }
 
-// Rota para buscar pontos de apoio usando a API do Google Places e cache no MongoDB
+// Rota atualizada
 router.get("/nearby", nearbyLimiter, async (req, res, next) => {
   try {
     const {
       latitude: lat,
       longitude: lon,
-      query = "centro de apoio",
+      query,
       page = 1,
       limit = 20,
-      type, // Filtro opcional
-      sortBy, // Ordenação opcional
+      type,
+      sortBy,
     } = req.query;
 
     let latitude = parseFloat(lat);
@@ -104,12 +114,21 @@ router.get("/nearby", nearbyLimiter, async (req, res, next) => {
     latitude = roundCoordinate(latitude);
     longitude = roundCoordinate(longitude);
 
-    // Tentar recuperar dados do cache
-    const cacheEntry = await GeoCache.findOne({
+    // Definir os termos de busca
+    let queries = ["CRAS", "Clínicas de Saúde Mental"];
+    if (query) {
+      queries = query.split(",").map((q) => q.trim());
+    }
+
+    // Chave do cache
+    const cacheKey = {
       latitude,
       longitude,
-      query,
-    });
+      queries,
+    };
+
+    // Tentar recuperar dados do cache
+    const cacheEntry = await GeoCache.findOne(cacheKey);
 
     let supportPoints;
     if (cacheEntry) {
@@ -120,7 +139,7 @@ router.get("/nearby", nearbyLimiter, async (req, res, next) => {
       const { results } = await getSupportPointsFromGoogle(
         latitude,
         longitude,
-        query
+        queries
       );
 
       if (results.length === 0) {
@@ -131,9 +150,7 @@ router.get("/nearby", nearbyLimiter, async (req, res, next) => {
 
       // Armazenar resultados no cache
       const newCacheEntry = new GeoCache({
-        latitude,
-        longitude,
-        query,
+        ...cacheKey,
         data: results,
       });
 
@@ -179,8 +196,6 @@ router.get("/nearby", nearbyLimiter, async (req, res, next) => {
     });
   } catch (error) {
     console.error("Erro ao buscar pontos de apoio:", error.message);
-    next(error); // Encaminhar erro para o middleware de tratamento de erros
+    next(error);
   }
 });
-
-module.exports = router;

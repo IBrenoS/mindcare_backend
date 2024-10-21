@@ -138,7 +138,7 @@ router.get("/nearby", nearbyLimiter, async (req, res, next) => {
     longitude = roundCoordinate(longitude);
 
     // Definir os termos de busca
-    let queries = ["CRAS", "Clínicas de Saúde Mental"];
+    let queries = ["CRAS", "Clinica Psiquiatrica", "Clinica Psicologica"];
     if (query) {
       queries = query.split(",").map((q) => q.trim());
     }

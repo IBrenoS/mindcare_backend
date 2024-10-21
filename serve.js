@@ -31,7 +31,7 @@ app.use("/geo", require("./routes/geoRoutes"));
 app.use("/exercises", require("./routes/exerciseRoutes"));
 app.use("/educational", require("./routes/educationalRoutes"));
 app.use("/automate", require("./routes/automateRoutes"));
-app.use("/moderation", require("./routes/moderationRoutes"));
+app.use("/moderation", require("./routes/moderationRoutes")); // Use o prefixo 'api' como base para as rotas
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () =>

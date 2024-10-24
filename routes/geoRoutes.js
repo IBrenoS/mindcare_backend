@@ -36,16 +36,12 @@ function getDistance(lat1, lon1, lat2, lon2) {
 }
 
 // Função para buscar pontos de apoio pela API do Google Places
-async function getSupportPointsFromGoogle(latitude, longitude, nextPageToken) {
-  const queries = [
-    "CRAS",
-    "Centro de Referência de Assistência Social",
-    "Clínicas Psicológicas",
-    "Psicólogo",
-    "Psiquiátrico",
-    "Psiquiatra",
-  ];
-
+async function getSupportPointsFromGoogle(
+  latitude,
+  longitude,
+  queries,
+  nextPageToken
+) {
   let results = [];
 
   for (const query of queries) {
@@ -60,6 +56,7 @@ async function getSupportPointsFromGoogle(latitude, longitude, nextPageToken) {
     try {
       const response = await axios.get(googleUrl);
 
+      // Mapear resultados relevantes
       const queryResults = response.data.results.map((item) => {
         const photos =
           item.photos?.map((photo) => {
@@ -90,13 +87,23 @@ async function getSupportPointsFromGoogle(latitude, longitude, nextPageToken) {
             status: openNow,
           },
           photos: photos,
-          distance: 0, // Será calculado posteriormente
+          distance: 0,
         };
       });
 
       results = [...results, ...queryResults];
     } catch (error) {
-      console.error("Erro na API Google Places:", error.message);
+      if (error.response) {
+        // Erro vindo da API
+        console.error(
+          `Erro na API Google Places: ${error.response.data.error_message}`
+        );
+      } else {
+        // Outro erro (ex: falha de rede)
+        console.error(
+          `Erro de rede ao acessar Google Places API: ${error.message}`
+        );
+      }
       throw new Error("Erro ao buscar pontos de apoio externos.");
     }
   }
@@ -151,7 +158,14 @@ router.get(
       longitude = roundCoordinate(longitude);
 
       // Definir os termos de busca
-      let queries = ["CRAS", "Clínicas de Saúde Mental"];
+      let queries = [
+        "CRAS",
+        "Centro de Referência de Assistência Social",
+        "Clínicas Psicológicas",
+        "Psicólogo",
+        "Psiquiátrico",
+        "Psiquiatra",
+      ];
       if (query) {
         queries = query.split(",").map((q) => q.trim());
       }

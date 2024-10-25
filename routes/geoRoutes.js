@@ -115,7 +115,6 @@ async function getSupportPointsFromGoogle(
   };
 }
 
-
 // Validação de parâmetros com express-validator
 const validateQueryParams = [
   query("latitude")
@@ -159,14 +158,11 @@ router.get(
       latitude = roundCoordinate(latitude);
       longitude = roundCoordinate(longitude);
 
-      // Definir os termos de busca
+      // Definir os termos de busca específicos
       let queries = [
-        "CRAS",
-        "Centro de Referência de Assistência Social",
-        "Clínicas Psicológicas",
-        "Psicólogo",
-        "Psiquiátrico",
-        "Psiquiatra",
+        "CRAS", // Centro de Referência de Assistência Social
+        "Clínicas Psiquiátricas", // Clínicas psiquiátricas
+        "Clínicas psicológicas", // Psicólogos
       ];
       if (query) {
         queries = query.split(",").map((q) => q.trim());

@@ -66,11 +66,15 @@ async function getSupportPointsFromGoogle(
             };
           }) || [];
 
-        const openingHours =
-          item.opening_hours?.weekday_text || "Horários não disponíveis";
-        const openNow = item.opening_hours?.open_now
-          ? "Aberto agora"
-          : "Fechado no momento";
+        // Verificar se opening_hours existe e está completo
+        const openingHours = {
+          text: item.opening_hours?.weekday_text || [
+            "Horários não disponíveis",
+          ],
+          status: item.opening_hours?.open_now
+            ? "Aberto agora"
+            : "Fechado no momento",
+        };
 
         return {
           id: item.place_id,
@@ -82,10 +86,7 @@ async function getSupportPointsFromGoogle(
           address: item.formatted_address || "Endereço não disponível",
           type: item.types.includes("health") ? "public" : "private",
           rating: item.rating || "Sem avaliação",
-          opening_hours: {
-            text: openingHours,
-            status: openNow,
-          },
+          opening_hours: openingHours,
           photos: photos,
           distance: 0,
         };
@@ -113,6 +114,7 @@ async function getSupportPointsFromGoogle(
     nextPageToken: nextPageToken || null,
   };
 }
+
 
 // Validação de parâmetros com express-validator
 const validateQueryParams = [

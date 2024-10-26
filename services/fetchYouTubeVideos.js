@@ -55,6 +55,7 @@ function createVideo(video) {
     description: video.snippet.description,
     url: `https://www.youtube.com/watch?v=${video.id.videoId}`,
     thumbnail: video.snippet.thumbnails.default.url,
+    channelName: video.snippet.channelTitle,
     status: "pending",
   });
 }

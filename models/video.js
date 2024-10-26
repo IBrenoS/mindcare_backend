@@ -5,10 +5,11 @@ const videoSchema = new mongoose.Schema({
   description: { type: String },
   url: { type: String, required: true },
   thumbnail: { type: String },
+  channelName: { type: String }, // Nome do canal
   status: {
     type: String,
     enum: ["pending", "approved", "rejected"],
-    default: "pending", // Todos os vídeos começam como 'pendentes'
+    default: "pending",
   },
   category: { type: String, default: "general" },
   createdAt: { type: Date, default: Date.now },

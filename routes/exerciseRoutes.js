@@ -16,7 +16,7 @@ router.post(
     try {
       if (
         !category ||
-        !["Meditação", "Relaxamento", "Yoga"].includes(category)
+        !["Meditação", "Relaxamento", "Saúde"].includes(category)
       ) {
         return res.status(400).json({ msg: "Categoria inválida." });
       }

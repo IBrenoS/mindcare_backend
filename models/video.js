@@ -13,7 +13,7 @@ const videoSchema = new mongoose.Schema({
   },
   category: {
     type: String,
-    enum: ["Meditação", "Relaxamento", "Yoga"],
+    enum: ["Meditação", "Relaxamento", "Saúde"],
     default: "Meditação",
   },
   createdAt: { type: Date, default: Date.now },

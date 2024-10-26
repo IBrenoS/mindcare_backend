@@ -4,7 +4,7 @@ require("dotenv").config();
 
 async function fetchYouTubeVideos(limit = 5) {
   const apiKey = process.env.YOUTUBE_API_KEY;
-  const searchQuery = "meditação, saúde mental"; // Palavras-chave para buscar vídeos
+  const searchQuery = "meditação, saúde mental";
 
   try {
     const videos = await fetchVideosFromYouTube(apiKey, searchQuery, limit);
@@ -15,6 +15,7 @@ async function fetchYouTubeVideos(limit = 5) {
   }
 }
 
+// Função para buscar vídeos no YouTube
 async function fetchVideosFromYouTube(apiKey, searchQuery, limit) {
   const response = await axios.get(
     "https://www.googleapis.com/youtube/v3/search",
@@ -31,6 +32,7 @@ async function fetchVideosFromYouTube(apiKey, searchQuery, limit) {
   return response.data.items;
 }
 
+// Função para salvar vídeos em lotes
 async function saveVideos(videos, batchSize) {
   let batch = [];
   for (const video of videos) {
@@ -43,23 +45,25 @@ async function saveVideos(videos, batchSize) {
     }
   }
 
-  // Salva qualquer vídeo restante
+  // Salva qualquer vídeo restante que não completou um batch
   if (batch.length > 0) {
     await saveBatch(batch);
   }
 }
 
+// Função para criar um documento Video a partir dos dados do vídeo do YouTube
 function createVideo(video) {
   return new Video({
     title: video.snippet.title,
     description: video.snippet.description,
     url: `https://www.youtube.com/watch?v=${video.id.videoId}`,
-    thumbnail: video.snippet.thumbnails.default.url,
+    thumbnail: video.snippet.thumbnails.high.url, // Thumbnail de alta qualidade
     channelName: video.snippet.channelTitle,
     status: "pending",
   });
 }
 
+// Função para salvar um lote de vídeos no banco de dados
 async function saveBatch(batch) {
   try {
     await Video.insertMany(batch); // Usa inserção em lote para otimizar o desempenho

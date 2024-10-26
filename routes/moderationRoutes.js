@@ -20,19 +20,14 @@ router.get(
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
-    const category = req.query.category; // Categoria opcional da query
+    const category = req.query.category;
 
-    // Cria um filtro dinâmico para o status "pending" e, se fornecido, a categoria
+    // Filtro dinâmico para "pending" status e, opcionalmente, categoria
     const filter = { status: "pending" };
-    if (category) {
-      filter.category = category;
-    }
+    if (category) filter.category = category;
 
     try {
-      const pendingVideos = await Video.find(filter)
-        .skip(skip)
-        .limit(limit);
-
+      const pendingVideos = await Video.find(filter).skip(skip).limit(limit);
       const totalVideos = await Video.countDocuments(filter);
 
       res.json({
@@ -48,14 +43,14 @@ router.get(
     } catch (err) {
       res.status(500).json({
         success: false,
-        data: null,
         message: "Erro ao listar vídeos pendentes.",
+        error: err.message,
       });
     }
   }
 );
 
-// Aprovar vídeo
+// Aprovar vídeo com categoria
 router.post(
   "/videos/approve/:id",
   authMiddleware,
@@ -65,36 +60,28 @@ router.post(
     const { category } = req.body;
 
     if (!isValidObjectId(videoId)) {
-      return res
-        .status(400)
-        .json({ success: false, data: null, message: "ID inválido." });
+      return res.status(400).json({ success: false, message: "ID inválido." });
     }
 
     if (!category) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          data: null,
-          message: "A categoria do vídeo é obrigatória.",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "A categoria do vídeo é obrigatória.",
+      });
     }
 
     try {
       const video = await Video.findByIdAndUpdate(
         videoId,
-        { status: "approved" },
+        { status: "approved", category }, // Inclui a categoria na aprovação
         { new: true }
       );
 
       if (!video) {
-        return res
-          .status(404)
-          .json({
-            success: false,
-            data: null,
-            message: "Vídeo não encontrado.",
-          });
+        return res.status(404).json({
+          success: false,
+          message: "Vídeo não encontrado.",
+        });
       }
 
       res.json({
@@ -103,13 +90,11 @@ router.post(
         message: "Vídeo aprovado com sucesso.",
       });
     } catch (err) {
-      res
-        .status(500)
-        .json({
-          success: false,
-          data: null,
-          message: "Erro ao aprovar o vídeo.",
-        });
+      res.status(500).json({
+        success: false,
+        message: "Erro ao aprovar o vídeo.",
+        error: err.message,
+      });
     }
   }
 );
@@ -123,9 +108,7 @@ router.post(
     const videoId = req.params.id;
 
     if (!isValidObjectId(videoId)) {
-      return res
-        .status(400)
-        .json({ success: false, data: null, message: "ID inválido." });
+      return res.status(400).json({ success: false, message: "ID inválido." });
     }
 
     try {
@@ -136,13 +119,10 @@ router.post(
       );
 
       if (!video) {
-        return res
-          .status(404)
-          .json({
-            success: false,
-            data: null,
-            message: "Vídeo não encontrado.",
-          });
+        return res.status(404).json({
+          success: false,
+          message: "Vídeo não encontrado.",
+        });
       }
 
       res.json({
@@ -151,13 +131,11 @@ router.post(
         message: "Vídeo rejeitado com sucesso.",
       });
     } catch (err) {
-      res
-        .status(500)
-        .json({
-          success: false,
-          data: null,
-          message: "Erro ao rejeitar o vídeo.",
-        });
+      res.status(500).json({
+        success: false,
+        message: "Erro ao rejeitar o vídeo.",
+        error: err.message,
+      });
     }
   }
 );
@@ -176,7 +154,6 @@ router.get(
       const pendingArticles = await Article.find({ status: "pending" })
         .skip(skip)
         .limit(limit);
-
       const totalArticles = await Article.countDocuments({ status: "pending" });
 
       res.json({
@@ -190,13 +167,11 @@ router.get(
         },
       });
     } catch (err) {
-      res
-        .status(500)
-        .json({
-          success: false,
-          data: null,
-          message: "Erro ao listar artigos pendentes.",
-        });
+      res.status(500).json({
+        success: false,
+        message: "Erro ao listar artigos pendentes.",
+        error: err.message,
+      });
     }
   }
 );
@@ -210,9 +185,7 @@ router.post(
     const articleId = req.params.id;
 
     if (!isValidObjectId(articleId)) {
-      return res
-        .status(400)
-        .json({ success: false, data: null, message: "ID inválido." });
+      return res.status(400).json({ success: false, message: "ID inválido." });
     }
 
     try {
@@ -223,13 +196,10 @@ router.post(
       );
 
       if (!article) {
-        return res
-          .status(404)
-          .json({
-            success: false,
-            data: null,
-            message: "Artigo não encontrado.",
-          });
+        return res.status(404).json({
+          success: false,
+          message: "Artigo não encontrado.",
+        });
       }
 
       res.json({
@@ -238,13 +208,11 @@ router.post(
         message: "Artigo aprovado com sucesso.",
       });
     } catch (err) {
-      res
-        .status(500)
-        .json({
-          success: false,
-          data: null,
-          message: "Erro ao aprovar o artigo.",
-        });
+      res.status(500).json({
+        success: false,
+        message: "Erro ao aprovar o artigo.",
+        error: err.message,
+      });
     }
   }
 );
@@ -258,9 +226,7 @@ router.post(
     const articleId = req.params.id;
 
     if (!isValidObjectId(articleId)) {
-      return res
-        .status(400)
-        .json({ success: false, data: null, message: "ID inválido." });
+      return res.status(400).json({ success: false, message: "ID inválido." });
     }
 
     try {
@@ -271,13 +237,10 @@ router.post(
       );
 
       if (!article) {
-        return res
-          .status(404)
-          .json({
-            success: false,
-            data: null,
-            message: "Artigo não encontrado.",
-          });
+        return res.status(404).json({
+          success: false,
+          message: "Artigo não encontrado.",
+        });
       }
 
       res.json({
@@ -286,13 +249,39 @@ router.post(
         message: "Artigo rejeitado com sucesso.",
       });
     } catch (err) {
-      res
-        .status(500)
-        .json({
-          success: false,
-          data: null,
-          message: "Erro ao rejeitar o artigo.",
-        });
+      res.status(500).json({
+        success: false,
+        message: "Erro ao rejeitar o artigo.",
+        error: err.message,
+      });
+    }
+  }
+);
+
+// Limpeza de documentos rejeitados
+router.delete(
+  "/clean-rejected",
+  authMiddleware,
+  authorize(["moderator", "admin"]),
+  async (req, res) => {
+    try {
+      const deletedVideos = await Video.deleteMany({ status: "rejected" });
+      const deletedArticles = await Article.deleteMany({ status: "rejected" });
+
+      res.json({
+        success: true,
+        message: "Documentos rejeitados limpos com sucesso.",
+        deleted: {
+          videos: deletedVideos.deletedCount,
+          articles: deletedArticles.deletedCount,
+        },
+      });
+    } catch (err) {
+      res.status(500).json({
+        success: false,
+        message: "Erro ao limpar documentos rejeitados.",
+        error: err.message,
+      });
     }
   }
 );

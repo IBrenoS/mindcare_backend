@@ -1,82 +1,44 @@
 const axios = require("axios");
 const Article = require("../models/articles");
-require("dotenv").config();
 
-async function fetchNewsAPIArticles(limit = 10) {
+async function fetchNewsAPIArticles() {
   const apiKey = process.env.NEWS_API_KEY;
 
   try {
-    const articles = await fetchArticlesFromAPI(apiKey, limit);
-    await saveArticles(articles, limit);
-    console.log(
-      `${articles.length} artigos de saúde mental salvos com sucesso!`
-    );
+    const articles = await fetchArticlesFromAPI(apiKey);
+    await saveArticles(articles);
+    console.log("Todos os artigos salvos com sucesso!");
   } catch (err) {
     console.error("Erro ao buscar ou salvar artigos da NewsAPI:", err.message);
   }
 }
 
-async function fetchArticlesFromAPI(apiKey, limit) {
+async function fetchArticlesFromAPI(apiKey) {
   const response = await axios.get("https://newsapi.org/v2/everything", {
     params: {
-      q: "saúde mental OR saúde emocional OR ansiedade OR depressão", // Palavras-chave mais específicas
+      q: "saúde mental OR saúde emocional OR ansiedade OR depressão",
       language: "pt",
       sortBy: "relevancy",
       apiKey: apiKey,
-      pageSize: limit, // Define o limite de artigos por requisição
+      pageSize: 10,
     },
   });
   return response.data.articles;
 }
 
-async function saveArticles(articles, batchSize) {
-  let batch = [];
+async function saveArticles(articles) {
   for (const article of articles) {
-    if (!isValidArticle(article)) {
-      console.warn("Artigo inválido, faltando título ou URL:", article);
-      continue; // Pula o artigo que não tem título ou URL
-    }
-
-    const newArticle = createArticle(article);
-    batch.push(newArticle);
-
-    if (batch.length === batchSize) {
-      await saveBatch(batch);
-      batch = []; // Limpa o batch após salvar
-    }
-  }
-
-  // Salva qualquer artigo restante
-  if (batch.length > 0) {
-    await saveBatch(batch);
-  }
-}
-
-function isValidArticle(article) {
-  return article.title && article.url;
-}
-
-function createArticle(article) {
-  return new Article({
-    title: article.title,
-    description: article.description || "Descrição indisponível",
-    content: article.content || "Conteúdo indisponível",
-    author: article.author || "Autor desconhecido",
-    url: article.url,
-    source: article.source.name || "Fonte desconhecida",
-    status: "pending",
-  });
-}
-
-async function saveBatch(batch) {
-  try {
-    await Article.insertMany(batch); // Usa inserção em lote para otimizar o desempenho
-    console.log(`Lote de ${batch.length} artigos salvo com sucesso!`);
-  } catch (err) {
-    console.error(
-      "Erro ao salvar o lote de artigos no banco de dados:",
-      err.message
-    );
+    const newArticle = new Article({
+      title: article.title,
+      description: article.description || "Descrição indisponível",
+      content: article.content || "Conteúdo indisponível",
+      author: article.author || "Autor desconhecido",
+      url: article.url,
+      urlToImage: article.urlToImage || "", // Salva a URL da imagem
+      source: article.source.name || "Fonte desconhecida",
+      status: "pending",
+    });
+    await newArticle.save();
   }
 }
 

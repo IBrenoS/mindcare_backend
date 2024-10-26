@@ -11,7 +11,7 @@ function isValidObjectId(id) {
   return mongoose.Types.ObjectId.isValid(id);
 }
 
-// Rota para listar vídeos pendentes com paginação
+// Rota para listar vídeos pendentes com paginação e filtragem por categoria
 router.get(
   "/videos/pending",
   authMiddleware,
@@ -20,13 +20,20 @@ router.get(
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
+    const category = req.query.category; // Categoria opcional da query
+
+    // Cria um filtro dinâmico para o status "pending" e, se fornecido, a categoria
+    const filter = { status: "pending" };
+    if (category) {
+      filter.category = category;
+    }
 
     try {
-      const pendingVideos = await Video.find({ status: "pending" })
+      const pendingVideos = await Video.find(filter)
         .skip(skip)
         .limit(limit);
 
-      const totalVideos = await Video.countDocuments({ status: "pending" });
+      const totalVideos = await Video.countDocuments(filter);
 
       res.json({
         success: true,
@@ -39,13 +46,11 @@ router.get(
         },
       });
     } catch (err) {
-      res
-        .status(500)
-        .json({
-          success: false,
-          data: null,
-          message: "Erro ao listar vídeos pendentes.",
-        });
+      res.status(500).json({
+        success: false,
+        data: null,
+        message: "Erro ao listar vídeos pendentes.",
+      });
     }
   }
 );

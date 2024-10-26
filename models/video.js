@@ -5,13 +5,17 @@ const videoSchema = new mongoose.Schema({
   description: { type: String },
   url: { type: String, required: true },
   thumbnail: { type: String },
-  channelName: { type: String }, // Nome do canal
+  channelName: { type: String },
   status: {
     type: String,
     enum: ["pending", "approved", "rejected"],
     default: "pending",
   },
-  category: { type: String, default: "general" },
+  category: {
+    type: String,
+    enum: ["Meditação", "Relaxamento", "Yoga"],
+    default: "Meditação",
+  },
   createdAt: { type: Date, default: Date.now },
 });
 

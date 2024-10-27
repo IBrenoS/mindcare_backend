@@ -11,6 +11,7 @@ router.get("/articles", authMiddleware, async (req, res) => {
 
   try {
     const approvedArticles = await Article.find({ status: "approved" })
+      .select("title summary content author source url urlToImage createdAt")
       .skip(skip)
       .limit(limit);
 

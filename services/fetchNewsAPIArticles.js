@@ -7,7 +7,7 @@ async function fetchNewsAPIArticles() {
   try {
     const articles = await fetchArticlesFromAPI(apiKey);
     await saveArticles(articles);
-    console.log("Todos os artigos salvos com sucesso!");
+    console.log(` ${articles.length} Artigos buscados e salvos com sucesso!`);
   } catch (err) {
     console.error("Erro ao buscar ou salvar artigos da NewsAPI:", err.message);
   }
@@ -20,7 +20,7 @@ async function fetchArticlesFromAPI(apiKey) {
       language: "pt",
       sortBy: "relevancy",
       apiKey: apiKey,
-      pageSize: 10,
+      pageSize: 50,
     },
   });
   return response.data.articles;

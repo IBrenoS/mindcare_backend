@@ -1,43 +1,35 @@
 const express = require("express");
-const router = express.Router();
 const Video = require("../models/video");
 const authMiddleware = require("../middlewares/auth");
-const authorize = require("../middlewares/authorize");
+const router = express.Router();
 
-// Rota para aprovar vídeo com categoria
-router.post(
-  "/videos/approve/:id",
-  authMiddleware,
-  authorize(["moderator", "admin"]),
-  async (req, res) => {
-    const videoId = req.params.id;
-    const { category } = req.body; // Recebe a categoria do frontend
+// Rota para listar vídeos aprovados com filtragem opcional por categoria
+router.get("/videos", authMiddleware, async (req, res) => {
+  try {
+    const category = req.query.category
+      ? decodeURIComponent(req.query.category)
+      : null;
 
-    try {
-      if (
-        !category ||
-        !["Meditação", "Relaxamento", "Saúde"].includes(category)
-      ) {
-        return res.status(400).json({ msg: "Categoria inválida." });
-      }
-
-      const video = await Video.findByIdAndUpdate(
-        videoId,
-        { status: "approved", category: category },
-        { new: true }
-      );
-
-      if (!video) {
-        return res.status(404).json({ msg: "Vídeo não encontrado." });
-      }
-
-      res.json({ msg: "Vídeo aprovado com sucesso.", video });
-    } catch (err) {
-      res
-        .status(500)
-        .json({ msg: "Erro ao aprovar o vídeo.", error: err.message });
+    // Filtro para buscar vídeos aprovados, e se houver uma categoria, aplica também
+    const filter = { status: "approved" };
+    if (category) {
+      filter.category = category;
     }
+
+    const approvedVideos = await Video.find(filter);
+    res.json({
+      success: true,
+      data: approvedVideos,
+      message: "Vídeos aprovados listados com sucesso.",
+    });
+  } catch (err) {
+    console.error("Erro ao listar vídeos aprovados:", err.message);
+    res.status(500).json({
+      success: false,
+      message: "Erro ao listar vídeos aprovados.",
+      error: err.message,
+    });
   }
-);
+});
 
 module.exports = router;

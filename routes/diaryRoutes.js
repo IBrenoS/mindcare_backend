@@ -190,6 +190,17 @@ router.delete("/entries/:id", authMiddleware, async (req, res) => {
   }
 });
 
+// Rota para buscar emojis personalizados do usuário
+router.get('/emojis', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id; 
+    const emojis = await getUserCustomEmojis(userId);
+    res.status(200).json(emojis);
+  } catch (error) {
+    res.status(500).json({ message: 'Erro ao carregar emojis personalizados.' });
+  }
+});
+
 // Gerenciar emojis personalizados do usuário
 router.put("/emojis", authMiddleware, async (req, res) => {
   const { emojis } = req.body;

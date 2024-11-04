@@ -2,8 +2,15 @@ const express = require("express");
 const { check, validationResult } = require("express-validator");
 const authMiddleware = require("../middlewares/auth"); // Middleware de autenticação JWT
 const DiaryEntry = require("../models/diaryEntry");
+const User = require("../models/user");
 const router = express.Router();
 const dayjs = require("dayjs");
+
+// Definir a função getUserCustomEmojis
+const getUserCustomEmojis = async (userId) => {
+  const user = await User.findById(userId).select("customEmojis");
+  return user.customEmojis;
+};
 
 // Criar uma nova entrada no diário de humor
 router.post(

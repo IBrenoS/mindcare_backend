@@ -17,8 +17,7 @@ router.post(
       .isLength({ max: 5 })
       .withMessage("O emoji deve ter no máximo 5 caracteres."),
     check("entry")
-      .notEmpty()
-      .withMessage("A entrada de texto é obrigatória.")
+      .optional()
       .isLength({ max: 1000 })
       .withMessage("A entrada de texto deve ter no máximo 1000 caracteres."),
   ],
@@ -137,8 +136,6 @@ router.put(
       .withMessage("O emoji deve ter no máximo 5 caracteres."),
     check("entry")
       .optional()
-      .notEmpty()
-      .withMessage("A entrada de texto não pode estar vazia.")
       .isLength({ max: 1000 })
       .withMessage("A entrada de texto deve ter no máximo 1000 caracteres."),
   ],
@@ -190,6 +187,28 @@ router.delete("/entries/:id", authMiddleware, async (req, res) => {
   } catch (error) {
     console.error(error.message);
     res.status(500).json({ msg: "Erro ao deletar a entrada de humor." });
+  }
+});
+
+// Gerenciar emojis personalizados do usuário
+router.put("/emojis", authMiddleware, async (req, res) => {
+  const { emojis } = req.body;
+
+  if (!Array.isArray(emojis) || emojis.length > 6) {
+    return res.status(400).json({ msg: "Você pode personalizar até 6 emojis." });
+  }
+
+  try {
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { customEmojis: emojis },
+      { new: true }
+    ).select("customEmojis");
+
+    res.json(user.customEmojis);
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).json({ msg: "Erro ao atualizar os emojis personalizados." });
   }
 });
 

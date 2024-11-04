@@ -18,6 +18,16 @@ const UserSchema = new mongoose.Schema({
   resetPasswordAttempts: { type: Number, default: 0 }, // Rastreia o número de tentativas
   resetPasswordLockUntil: { type: Date }, // Bloqueia o usuário após múltiplas tentativas
   date: { type: Date, default: Date.now },
+  customEmojis: {
+    type: [String],
+    default: [],
+    validate: {
+      validator: function (v) {
+        return v.length <= 6;
+      },
+      message: "Você pode personalizar até 6 emojis.",
+    },
+  },
 });
 
 module.exports = mongoose.model("User", UserSchema);

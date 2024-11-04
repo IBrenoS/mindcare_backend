@@ -22,7 +22,6 @@ const DiaryEntrySchema = new mongoose.Schema(
     },
     entry: {
       type: String,
-      required: true,
       maxlength: 1000, // Limite máximo de caracteres para o texto
     },
   },

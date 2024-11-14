@@ -11,7 +11,7 @@ const sendPasswordResetEmail = async (email, code) => {
 
   const msg = {
     to: email,
-    from: process.env.SENDGRID_EMAIL_SENDER, // E-mail do remetente configurado no SendGrid
+    from: process.env.SENDGRID_EMAIL_SENDER,
     subject: "Redefinição de Senha - MindCare",
     text: `Olá,
 
@@ -43,15 +43,15 @@ const sendPasswordResetEmail = async (email, code) => {
 };
 
 
-// Função para enviar mensagens de contato ao suporte
-const sendContactEmail = async (name, email, subject, message) => {
+// Função para enviar e-mail de contato
+const sendContactEmail = async ({ name, email, subject, message }) => {
   const msg = {
     to: process.env.SENDGRID_EMAIL_SUPPORT,
     from: process.env.SENDGRID_EMAIL_SENDER,
     subject: `Contato MindCare: ${subject}`,
-    text: `Nome: ${name || "Anônimo"}\nE-mail: ${email}\nAssunto: ${subject}\n\nMensagem:\n${message}`,
+    text: `Nome: ${name || 'Anônimo'}\nE-mail: ${email}\n\nMensagem:\n${message}`,
     html: `
-      <p><strong>Nome:</strong> ${name || "Anônimo"}</p>
+      <p><strong>Nome:</strong> ${name || 'Anônimo'}</p>
       <p><strong>E-mail:</strong> ${email}</p>
       <p><strong>Assunto:</strong> ${subject}</p>
       <p><strong>Mensagem:</strong></p>
@@ -60,11 +60,11 @@ const sendContactEmail = async (name, email, subject, message) => {
   };
 
   try {
-    console.log("Tentando enviar mensagem de contato...");
     await sgMail.send(msg);
-    console.log("Mensagem de contato enviada com sucesso!");
+    console.log('E-mail de contato enviado com sucesso!');
   } catch (error) {
-    console.error("Erro ao enviar mensagem de contato:", error);
+    console.error('Erro ao enviar e-mail de contato:', error);
+    throw new Error('Erro ao enviar e-mail de contato.');
   }
 };
 

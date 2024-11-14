@@ -1,8 +1,9 @@
 const express = require("express");
 const { sendContactEmail } = require("../services/sendGrid");
 const router = express.Router();
+const authMiddleware = require("../middlewares/auth");
 
-router.post("/contact", async (req, res) => {
+router.post("/suport", authMiddleware, async (req, res) => {
   const { name, email, subject, message } = req.body;
 
   try {

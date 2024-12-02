@@ -1,6 +1,5 @@
 const mongoose = require("mongoose");
 
-// Definindo o esquema de entradas do diário de humor com timestamps
 const DiaryEntrySchema = new mongoose.Schema(
   {
     userId: {
@@ -24,6 +23,8 @@ const DiaryEntrySchema = new mongoose.Schema(
       type: String,
       maxlength: 1000, // Limite máximo de caracteres para o texto
     },
+    isActive: { type: Boolean, default: true },
+    deletionScheduledAt: { type: Date },
   },
   {
     timestamps: true, // Adiciona automaticamente os campos createdAt e updatedAt
@@ -32,5 +33,8 @@ const DiaryEntrySchema = new mongoose.Schema(
 
 // Índice composto para consultas por userId e createdAt
 DiaryEntrySchema.index({ userId: 1, createdAt: -1 });
+
+// Índice para consultas de limpeza
+DiaryEntrySchema.index({ deletionScheduledAt: 1, isActive: 1 });
 
 module.exports = mongoose.model("DiaryEntry", DiaryEntrySchema);

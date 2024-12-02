@@ -9,51 +9,17 @@ const User = require("../models/user");
 const { sendPasswordResetEmail } = require("../services/sendGrid");
 const cloudinary = require("../config/cloudinary");
 const multer = require("multer");
-
+const DiaryEntry = require("../models/diaryEntry");
+const Post = require("../models/post");
+const Notification = require("../models/notification");
 
 const router = express.Router();
 
-// Configuração do multer para armazenar arquivos temporariamente na memória
 const storage = multer.memoryStorage();
-const upload = multer({ storage: storage }); // Middleware de upload
+const upload = multer({ storage: storage });
 
-async function uploadImageToCloudinary(buffer) {
-  return new Promise((resolve, reject) => {
-    cloudinary.uploader
-      .upload_stream({ resource_type: "image" }, (error, result) => {
-        if (error) {
-          console.error("Erro no upload para o Cloudinary:", error); // Log detalhado do erro
-          return reject(error);
-        }
-        if (!result || !result.secure_url) {
-          console.error("Erro: Resposta inesperada do Cloudinary:", result);
-          return reject(new Error("Erro ao processar upload no Cloudinary."));
-        }
-        resolve(result);
-      })
-      .end(buffer);
-  });
-}
-
-// Registro de usuário
-router.post("/register", upload.single("image"), // Adicionando o upload no registro de usuário
-  [
-    body("name").notEmpty(),
-    body("email").isEmail(),
-    body("password").isLength({ min: 6 }),
-    body("passwordConfirmation").custom((value, { req }) => {
-      if (value !== req.body.password) {
-        throw new Error("Password confirmation does not match password");
-      }
-      return true;
-    }),
-    body("phone").notEmpty().isMobilePhone(),
-    body("role")
-      .optional()
-      .isIn(["user", "moderator", "admin"])
-      .withMessage("Invalid role"),
-  ],
-  async (req, res) => {
+class AuthController {
+  static async register(req, res) {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ errors: errors.array() });
@@ -62,26 +28,22 @@ router.post("/register", upload.single("image"), // Adicionando o upload no regi
     const { name, email, password, phone, role } = req.body;
 
     try {
-      // Verificar se o usuário já existe
       let user = await User.findOne({ email });
       if (user) {
         return res.status(400).json({ msg: "Usuário já existe." });
       }
 
-      // Criptografar a senha
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash(password, salt);
 
-      // Inicializa o novo usuário
       user = new User({
         name,
         email,
         password: hashedPassword,
         phone,
-        role: role || "user", // Se o role não for especificado, define como 'user'
+        role: role || "user",
       });
 
-      // Se o usuário enviou uma foto, faz upload para o Cloudinary
       if (req.file) {
         const result = await new Promise((resolve, reject) => {
           cloudinary.uploader
@@ -91,13 +53,11 @@ router.post("/register", upload.single("image"), // Adicionando o upload no regi
             })
             .end(req.file.buffer);
         });
-        user.photoUrl = result.secure_url; // Armazena a URL da foto de perfil
+        user.photoUrl = result.secure_url;
       }
 
-      // Salvar o novo usuário no banco de dados
       await user.save();
 
-      // Gerar token JWT contendo o userId e a role
       const token = jwt.sign(
         { userId: user._id, role: user.role },
         process.env.JWT_SECRET,
@@ -110,11 +70,9 @@ router.post("/register", upload.single("image"), // Adicionando o upload no regi
       res.status(500).send("Erro no servidor");
     }
   }
-);
 
-// Login de usuário
-router.post("/login", [body("email").isEmail(), body("password").exists()],
-  async (req, res) => {
+
+  static async login(req, res) {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ errors: errors.array() });
@@ -133,9 +91,7 @@ router.post("/login", [body("email").isEmail(), body("password").exists()],
       const token = jwt.sign(
         { userId: user._id, role: user.role },
         process.env.JWT_SECRET,
-        {
-          expiresIn: "12h",
-        }
+        { expiresIn: "12h" }
       );
       res.json({ msg: "Login bem-sucedido", token });
     } catch (err) {
@@ -143,25 +99,23 @@ router.post("/login", [body("email").isEmail(), body("password").exists()],
       res.status(500).send("Erro no servidor");
     }
   }
-);
 
-// Perfil do usuário
-router.get("/profile", authMiddleware, async (req, res) => {
-  try {
-    const user = await User.findById(req.user.id).select("-password"); // Remove o campo de senha na resposta
-    if (!user) {
-      return res.status(404).json({ msg: "Usuário não encontrado" });
+
+  static async getProfile(req, res) {
+    try {
+      const user = await User.findById(req.user.id).select("-password");
+      if (!user) {
+        return res.status(404).json({ msg: "Usuário não encontrado" });
+      }
+      res.json(user);
+    } catch (error) {
+      console.error(error.message);
+      res.status(500).json({ msg: "Erro no servidor" });
     }
-    res.json(user); // Retorna os dados do usuário
-  } catch (error) {
-    console.error(error.message);
-    res.status(500).json({ msg: "Erro no servidor" });
   }
-});
 
-// Atualização do perfil do usuário
-router.put("/profile", authMiddleware, upload.single("image"),
-  async (req, res) => {
+
+  static async updateProfile(req, res) {
     const { name, bio, phone, email, password, newPassword } = req.body;
 
     try {
@@ -170,19 +124,15 @@ router.put("/profile", authMiddleware, upload.single("image"),
         return res.status(404).json({ msg: "Usuário não encontrado" });
       }
 
-      // Atualiza os campos permitidos
       if (name) user.name = name;
       if (bio) user.bio = bio;
       if (phone) user.phone = phone;
 
-      // Se houver uma nova foto de perfil, faz o upload no Cloudinary
       if (req.file) {
-        const result = await uploadImageToCloudinary(req.file.buffer);
-        user.photoUrl = result.secure_url; // Atualiza a URL da foto de perfil
-        console.log("Url da foto salva:", user.photoUrl);
+        const result = await Utils.uploadImageToCloudinary(req.file.buffer);
+        user.photoUrl = result.secure_url;
       }
 
-      // Atualização do email
       if (email && email !== user.email) {
         const existingUser = await User.findOne({ email });
         if (existingUser) {
@@ -191,7 +141,6 @@ router.put("/profile", authMiddleware, upload.single("image"),
         user.email = email;
       }
 
-      // Atualização da senha
       if (password && newPassword) {
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
@@ -201,7 +150,6 @@ router.put("/profile", authMiddleware, upload.single("image"),
         user.password = await bcrypt.hash(newPassword, salt);
       }
 
-      // Salva as mudanças no banco de dados
       await user.save();
       console.log("Perfil atualizado com sucesso");
 
@@ -214,295 +162,372 @@ router.put("/profile", authMiddleware, upload.single("image"),
       res.status(500).json({ msg: "Erro ao atualizar o perfil." });
     }
   }
-);
 
-function safeNormalizeEmail(email) {
-  // Converte o e-mail para minúsculas e remove espaços
-  return email.toLowerCase().trim();
-}
 
-// Rota para solicitação de recuperação de senha
-router.post("/forgotPassword", async (req, res) => {
-  let { email } = req.body;
+  static async forgotPassword(req, res) {
+    let { email } = req.body;
 
-  try {
-    // Aplica a normalização segura
-    email = safeNormalizeEmail(email);
+    try {
+      email = Utils.safeNormalizeEmail(email);
 
-    // Validação do e-mail após a normalização segura
-    if (!validator.isEmail(email)) {
-      return res.status(400).json({ msg: "E-mail inválido." });
-    }
+      if (!validator.isEmail(email)) {
+        return res.status(400).json({ msg: "E-mail inválido." });
+      }
 
-    const user = await User.findOne({ email });
-    if (!user) {
-      // Retorna uma mensagem genérica para evitar exposição
-      return res
+      const user = await User.findOne({ email });
+      if (!user) {
+        return res
+          .status(200)
+          .json({
+            msg: "Se o e-mail estiver cadastrado, um código de verificação será enviado.",
+          });
+      }
+
+      const verificationCode = Utils.generateRandomCode();
+      const hashedCode = await bcrypt.hash(verificationCode, 10);
+
+      user.resetPasswordToken = hashedCode;
+      user.resetPasswordExpires = Date.now() + 10 * 60 * 1000;
+      user.resetPasswordAttempts = 0;
+      await user.save();
+
+      await sendPasswordResetEmail(user.email, verificationCode);
+
+      res
         .status(200)
         .json({
           msg: "Se o e-mail estiver cadastrado, um código de verificação será enviado.",
         });
+    } catch (error) {
+      console.error("Erro ao solicitar recuperação de senha:", error.message);
+      res.status(500).json({ msg: "Erro ao solicitar recuperação de senha." });
     }
-
-    // Gera o código de verificação de 6 dígitos
-    const verificationCode = generateRandomCode();
-
-    // Hash do código de verificação
-    const hashedCode = await bcrypt.hash(verificationCode, 10);
-
-    // Armazena o hash do código de verificação e o tempo de expiração (10 minutos)
-    user.resetPasswordToken = hashedCode;
-    user.resetPasswordExpires = Date.now() + 10 * 60 * 1000; // Expira em 10 minutos
-    user.resetPasswordAttempts = 0; // Reseta as tentativas
-    await user.save();
-
-    // Envia o código de verificação por e-mail via SendGrid
-    await sendPasswordResetEmail(user.email, verificationCode);
-
-    res
-      .status(200)
-      .json({
-        msg: "Se o e-mail estiver cadastrado, um código de verificação será enviado.",
-      });
-  } catch (error) {
-    console.error("Erro ao solicitar recuperação de senha:", error.message);
-    res.status(500).json({ msg: "Erro ao solicitar recuperação de senha." });
   }
-});
 
-// Função para gerar um código de 6 dígitos
-function generateRandomCode() {
-  return crypto.randomInt(100000, 999999).toString();
+
+  static async verifyCode(req, res) {
+    let { email, code } = req.body;
+
+    try {
+      if (!email || !code) {
+        return res
+          .status(400)
+          .json({ msg: "E-mail e código de verificação são obrigatórios." });
+      }
+
+      if (!validator.isEmail(email)) {
+        return res.status(400).json({ msg: "E-mail inválido." });
+      }
+
+      if (!validator.isLength(code, { min: 6, max: 6 }) || !/^\d+$/.test(code)) {
+        return res.status(400).json({ msg: "Código de verificação inválido." });
+      }
+
+      email = Utils.safeNormalizeEmail(email);
+
+      const user = await User.findOne({ email });
+      if (!user) {
+        return res.status(404).json({ msg: "Usuário não encontrado." });
+      }
+
+      if (Utils.isUserLocked(user)) {
+        return res.status(423).json({
+          msg: "Muitas tentativas falhas. Tente novamente mais tarde.",
+        });
+      }
+
+      if (Utils.isCodeExpired(user)) {
+        return res.status(400).json({
+          msg: "O código de verificação expirou. Solicite um novo código.",
+        });
+      }
+
+      if (!(await Utils.isCodeValid(user, code))) {
+        await Utils.handleInvalidCode(user);
+        return res.status(400).json({ msg: "Código de verificação inválido." });
+      }
+
+      await Utils.handleValidCode(user);
+      res.status(200).json({
+        msg: "Código verificado com sucesso. Você pode redefinir sua senha agora.",
+      });
+    } catch (error) {
+      console.error("Erro ao verificar o código:", error.message);
+      res.status(500).json({ msg: "Erro ao verificar o código." });
+    }
+  }
+
+
+  static async resetPassword(req, res) {
+    let { email, code, newPassword } = req.body;
+
+    try {
+      if (!email || !code || !newPassword) {
+        return res.status(400).json({ msg: "Todos os campos são obrigatórios." });
+      }
+
+      if (!validator.isEmail(email)) {
+        return res.status(400).json({ msg: "E-mail inválido." });
+      }
+
+      if (!validator.isLength(code, { min: 6, max: 6 }) || !/^\d+$/.test(code)) {
+        return res.status(400).json({ msg: "Código de verificação inválido." });
+      }
+
+      if (!validator.isLength(newPassword, { min: 6 })) {
+        return res
+          .status(400)
+          .json({ msg: "A nova senha deve ter pelo menos 6 caracteres." });
+      }
+
+      email = Utils.safeNormalizeEmail(email);
+
+      const user = await User.findOne({ email });
+      if (!user) {
+        return res.status(404).json({ msg: "Usuário não encontrado." });
+      }
+
+      const userError = await Utils.validateUserForReset(user, code);
+      if (userError) {
+        return res.status(userError.status).json({ msg: userError.msg });
+      }
+
+      await Utils.updateUserPassword(user, newPassword);
+
+      res.status(200).json({ msg: "Senha redefinida com sucesso." });
+    } catch (error) {
+      console.error("Erro ao redefinir a senha:", error.message);
+      res.status(500).json({ msg: "Erro ao redefinir a senha." });
+    }
+  }
+
+
+  static async uploadImage(req, res) {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ msg: "Nenhuma imagem foi enviada." });
+      }
+
+      const result = await Utils.uploadImageToCloudinary(req.file.buffer);
+
+      const user = await User.findById(req.user.id);
+      if (!user) {
+        return res.status(404).json({ msg: "Usuário não encontrado." });
+      }
+
+      user.photoUrl = result.secure_url;
+      await user.save();
+
+      res.json({ msg: "Foto de perfil atualizada com sucesso.", secure_url: user.photoUrl });
+    } catch (error) {
+      console.error("Erro ao fazer upload da imagem:", error);
+      res.status(500).json({ msg: "Erro ao fazer upload da imagem. Tente novamente." });
+    }
+  }
+
+
+  static validateToken(req, res) {
+    res.status(200).json({ message: "Token válido", user: req.user });
+  }
+
+  static async deleteAccount(req, res) {
+    try {
+      const user = await User.findById(req.user.id);
+      if (!user) {
+        return res.status(404).json({ msg: "Usuário não encontrado" });
+      }
+
+      // Mark account for deletion with 7 days grace period
+      user.deletionScheduledAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      user.isActive = false;
+      await user.save();
+
+      res.json({
+        msg: "Conta marcada para exclusão. Será permanentemente removida em 7 dias.",
+        deletionDate: user.deletionScheduledAt
+      });
+    } catch (error) {
+      console.error("Erro ao deletar conta:", error);
+      res.status(500).json({ msg: "Erro ao processar exclusão da conta." });
+    }
+  }
+
+  static async cleanupDeletedAccounts() {
+    try {
+      const accounts = await User.find({
+        deletionScheduledAt: { $lt: new Date() },
+        isActive: false
+      });
+
+      for (const user of accounts) {
+        // Delete all related data in parallel
+        await Promise.all([
+          // Delete user's diary entries
+          DiaryEntry.deleteMany({ userId: user._id }),
+          // Delete user's posts and their references
+          Post.deleteMany({ userId: user._id }),
+          // Delete user's notifications
+          Notification.deleteMany({ userId: user._id }),
+          // Delete profile photo from Cloudinary if exists
+          user.photoUrl ? Utils.deleteImageFromCloudinary(user.photoUrl) : Promise.resolve()
+        ]);
+
+        // Finally delete the user
+        await user.deleteOne();
+      }
+    } catch (error) {
+      console.error("Erro ao limpar contas deletadas:", error);
+    }
+  }
 }
 
-const MAX_ATTEMPTS = 5;
-const LOCK_TIME = 15 * 60 * 1000; // Bloqueia por 15 minutos após exceder as tentativas
 
-// Rota para verificação do código de recuperação
-router.post("/verifyCode", async (req, res) => {
-  let { email, code } = req.body;
-
-  try {
-    // Verificação inicial de entrada
-    if (!email || !code) {
-      return res
-        .status(400)
-        .json({ msg: "E-mail e código de verificação são obrigatórios." });
-    }
-
-    // Validação do e-mail sem normalização neste ponto para evitar alterações indesejadas
-    if (!validator.isEmail(email)) {
-      return res.status(400).json({ msg: "E-mail inválido." });
-    }
-
-    // Garantir que o código tenha exatamente 6 caracteres numéricos
-    if (!validator.isLength(code, { min: 6, max: 6 }) || !/^\d+$/.test(code)) {
-      return res.status(400).json({ msg: "Código de verificação inválido." });
-    }
-
-    // Normalização segura do e-mail após a validação
-    email = safeNormalizeEmail(email);
-
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(404).json({ msg: "Usuário não encontrado." });
-    }
-
-    if (isUserLocked(user)) {
-      return res.status(423).json({
-        msg: "Muitas tentativas falhas. Tente novamente mais tarde.",
-      });
-    }
-
-    if (isCodeExpired(user)) {
-      return res.status(400).json({
-        msg: "O código de verificação expirou. Solicite um novo código.",
-      });
-    }
-
-    // Verifica se o código é válido sem alterar seu valor original
-    if (!(await isCodeValid(user, code))) {
-      await handleInvalidCode(user);
-      return res.status(400).json({ msg: "Código de verificação inválido." });
-    }
-
-    await handleValidCode(user);
-    res.status(200).json({
-      msg: "Código verificado com sucesso. Você pode redefinir sua senha agora.",
+class Utils {
+  static async uploadImageToCloudinary(buffer) {
+    return new Promise((resolve, reject) => {
+      cloudinary.uploader
+        .upload_stream({ resource_type: "image" }, (error, result) => {
+          if (error) {
+            console.error("Erro no upload para o Cloudinary:", error);
+            return reject(error);
+          }
+          if (!result || !result.secure_url) {
+            console.error("Erro: Resposta inesperada do Cloudinary:", result);
+            return reject(new Error("Erro ao processar upload no Cloudinary."));
+          }
+          resolve(result);
+        })
+        .end(buffer);
     });
-  } catch (error) {
-    console.error("Erro ao verificar o código:", error.message);
-    res.status(500).json({ msg: "Erro ao verificar o código." });
-  }
-});
-
-function isUserLocked(user) {
-  return user.resetPasswordLockUntil && user.resetPasswordLockUntil > Date.now();
-}
-
-function isCodeExpired(user) {
-  return !user.resetPasswordExpires || user.resetPasswordExpires < Date.now();
-}
-
-async function isCodeValid(user, code) {
-  return await bcrypt.compare(code, user.resetPasswordToken);
-}
-
-async function handleInvalidCode(user) {
-  user.resetPasswordAttempts = (user.resetPasswordAttempts || 0) + 1;
-  if (user.resetPasswordAttempts >= MAX_ATTEMPTS) {
-    user.resetPasswordLockUntil = Date.now() + LOCK_TIME;
-  }
-  await user.save();
-}
-
-async function handleValidCode(user) {
-  user.resetPasswordAttempts = 0;
-  await user.save();
-}
-
-// Rota para redefinição de senha
-router.post("/resetPassword", async (req, res) => {
-  let { email, code, newPassword } = req.body;
-
-  try {
-    // Validação inicial dos inputs
-    if (!email || !code || !newPassword) {
-      return res.status(400).json({ msg: "Todos os campos são obrigatórios." });
-    }
-
-    // Validação do e-mail sem sanitização para preservar o formato original
-    if (!validator.isEmail(email)) {
-      return res.status(400).json({ msg: "E-mail inválido." });
-    }
-
-    // Verificação se o código tem exatamente 6 caracteres numéricos
-    if (!validator.isLength(code, { min: 6, max: 6 }) || !/^\d+$/.test(code)) {
-      return res.status(400).json({ msg: "Código de verificação inválido." });
-    }
-
-    // Validação da nova senha: deve ter ao menos 6 caracteres
-    if (!validator.isLength(newPassword, { min: 6 })) {
-      return res
-        .status(400)
-        .json({ msg: "A nova senha deve ter pelo menos 6 caracteres." });
-    }
-
-    // Normalização segura do e-mail após validação
-    email = safeNormalizeEmail(email);
-
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(404).json({ msg: "Usuário não encontrado." });
-    }
-
-    const userError = await validateUserForReset(user, code);
-    if (userError) {
-      return res.status(userError.status).json({ msg: userError.msg });
-    }
-
-    // Atualiza a senha do usuário
-    await updateUserPassword(user, newPassword);
-
-    res.status(200).json({ msg: "Senha redefinida com sucesso." });
-  } catch (error) {
-    console.error("Erro ao redefinir a senha:", error.message);
-    res.status(500).json({ msg: "Erro ao redefinir a senha." });
-  }
-});
-
-// Função para validação do usuário antes da redefinição da senha
-async function validateUserForReset(user, code) {
-  if (isUserLocked(user)) {
-    return {
-      status: 423,
-      msg: "Muitas tentativas falhas. Tente novamente mais tarde.",
-    };
   }
 
-  if (isCodeExpired(user)) {
-    return {
-      status: 400,
-      msg: "O código de verificação expirou. Solicite um novo código.",
-    };
+  static safeNormalizeEmail(email) {
+    return email.toLowerCase().trim();
   }
 
-  // Verifica se o código é válido comparando o hash
-  if (!(await isCodeValid(user, code))) {
-    await handleInvalidCode(user);
-    return { status: 400, msg: "Código de verificação inválido." };
+  static generateRandomCode() {
+    return crypto.randomInt(100000, 999999).toString();
   }
 
-  return null;
-}
-
-async function updateUserPassword(user, newPassword) {
-  const salt = await bcrypt.genSalt(10);
-  user.password = await bcrypt.hash(newPassword, salt);
-
-  user.resetPasswordToken = undefined;
-  user.resetPasswordExpires = undefined;
-  user.resetPasswordAttempts = 0;
-  user.resetPasswordLockUntil = undefined;
-
-  await user.save();
-}
-
-function isUserLocked(user) {
-  return user.resetPasswordLockUntil && user.resetPasswordLockUntil > Date.now();
-}
-
-function isCodeExpired(user) {
-  return !user.resetPasswordExpires || user.resetPasswordExpires < Date.now();
-}
-
-async function isCodeValid(user, code) {
-  return await bcrypt.compare(code, user.resetPasswordToken);
-}
-
-async function handleInvalidCode(user) {
-  user.resetPasswordAttempts = (user.resetPasswordAttempts || 0) + 1;
-  if (user.resetPasswordAttempts >= MAX_ATTEMPTS) {
-    user.resetPasswordLockUntil = Date.now() + LOCK_TIME;
+  static isUserLocked(user) {
+    return user.resetPasswordLockUntil && user.resetPasswordLockUntil > Date.now();
   }
-  await user.save();
-}
 
-async function handleValidCode(user) {
-  user.resetPasswordAttempts = 0;
-  await user.save();
-}
+  static isCodeExpired(user) {
+    return !user.resetPasswordExpires || user.resetPasswordExpires < Date.now();
+  }
 
-// Rota para upload de imagem
-router.post("/upload", authMiddleware, upload.single("image"), async (req, res) => {
-  try {
-    // Verifica se o arquivo foi enviado
-    if (!req.file) {
-      return res.status(400).json({ msg: "Nenhuma imagem foi enviada." });
+  static async isCodeValid(user, code) {
+    return await bcrypt.compare(code, user.resetPasswordToken);
+  }
+
+  static async handleInvalidCode(user) {
+    user.resetPasswordAttempts = (user.resetPasswordAttempts || 0) + 1;
+    if (user.resetPasswordAttempts >= MAX_ATTEMPTS) {
+      user.resetPasswordLockUntil = Date.now() + LOCK_TIME;
+    }
+    await user.save();
+  }
+
+  static async handleValidCode(user) {
+    user.resetPasswordAttempts = 0;
+    await user.save();
+  }
+
+
+  static async validateUserForReset(user, code) {
+    if (this.isUserLocked(user)) {
+      return {
+        status: 423,
+        msg: "Muitas tentativas falhas. Tente novamente mais tarde.",
+      };
     }
 
-    // Faz o upload da imagem para o Cloudinary
-    const result = await uploadImageToCloudinary(req.file.buffer);
-
-    // Atualiza o campo photoUrl do usuário logado
-    const user = await User.findById(req.user.id); // Pega o usuário autenticado
-    if (!user) {
-      return res.status(404).json({ msg: "Usuário não encontrado." });
+    if (this.isCodeExpired(user)) {
+      return {
+        status: 400,
+        msg: "O código de verificação expirou. Solicite um novo código.",
+      };
     }
 
-    user.photoUrl = result.secure_url; // Atualiza a URL da foto de perfil
-    await user.save(); // Salva as alterações no banco de dados
+    if (!(await this.isCodeValid(user, code))) {
+      await this.handleInvalidCode(user);
+      return { status: 400, msg: "Código de verificação inválido." };
+    }
 
-    res.json({ msg: "Foto de perfil atualizada com sucesso.", secure_url: user.photoUrl });
-  } catch (error) {
-    console.error("Erro ao fazer upload da imagem:", error);
-    res.status(500).json({ msg: "Erro ao fazer upload da imagem. Tente novamente." });
+    return null;
   }
-});
 
-router.get("/validate-token", authMiddleware, (req, res) => {
+  static async updateUserPassword(user, newPassword) {
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(newPassword, salt);
 
-  res.status(200).json({ message: "Token válido", user: req.user });
-});
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    user.resetPasswordAttempts = 0;
+    user.resetPasswordLockUntil = undefined;
+
+    await user.save();
+  }
+
+  static deleteImageFromCloudinary(photoUrl) {
+    const publicId = photoUrl.split('/').pop().split('.')[0];
+    return new Promise((resolve, reject) => {
+      cloudinary.uploader.destroy(publicId, (error, result) => {
+        if (error) reject(error);
+        else resolve(result);
+      });
+    });
+  }
+}
+
+// Rota de registro
+router.post("/register", upload.single("image"), [
+  body("name").notEmpty(),
+  body("email").isEmail(),
+  body("password").isLength({ min: 6 }),
+  body("passwordConfirmation").custom((value, { req }) => {
+    if (value !== req.body.password) {
+      throw new Error("Password confirmation does not match password");
+    }
+    return true;
+  }),
+  body("phone").notEmpty().isMobilePhone(),
+  body("role")
+    .optional()
+    .isIn(["user", "moderator", "admin"])
+    .withMessage("Invalid role"),
+], AuthController.register);
+
+
+// Login do usuário
+router.post("/login", [body("email").isEmail(), body("password").exists()], AuthController.login);
+
+// Rota de perfil do usuário
+router.get("/profile", authMiddleware, AuthController.getProfile);
+
+// Atualizar perfil do usuário
+router.put("/profile", authMiddleware, upload.single("image"), AuthController.updateProfile);
+
+// Rota de esqueci minha senha
+router.post("/forgotPassword", AuthController.forgotPassword);
+
+// Rota de verificação de código
+router.post("/verifyCode", AuthController.verifyCode);
+
+// Rota de redefinição de senha
+router.post("/resetPassword", AuthController.resetPassword);
+
+// Rota de upload de imagem
+router.post("/upload", authMiddleware, upload.single("image"), AuthController.uploadImage);
+
+// Rota de validação de token
+router.get("/validate-token", authMiddleware, AuthController.validateToken);
+
+// Rota de exclusão de conta
+router.delete("/delete-account", authMiddleware, AuthController.deleteAccount);
+
+// Configura a tarefa de limpeza para ser executada diariamente
+setInterval(AuthController.cleanupDeletedAccounts, 24 * 60 * 60 * 1000);
 
 module.exports = router;

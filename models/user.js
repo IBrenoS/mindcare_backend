@@ -1,6 +1,5 @@
 const mongoose = require("mongoose");
 
-// Definindo o esquema do usuário
 const UserSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
@@ -28,6 +27,8 @@ const UserSchema = new mongoose.Schema({
       message: "Você pode personalizar até 6 emojis.",
     },
   },
+  isActive: { type: Boolean, default: true },
+  deletionScheduledAt: { type: Date },
 });
 
 module.exports = mongoose.model("User", UserSchema);

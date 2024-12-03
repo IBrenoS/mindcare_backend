@@ -15,5 +15,4 @@ const articleSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
 });
 
-module.exports =
-  mongoose.models.Article || mongoose.model("Article", articleSchema);
+module.exports = mongoose.models.Article || mongoose.model("Article", articleSchema);
